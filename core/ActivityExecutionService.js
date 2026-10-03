@@ -38,6 +38,7 @@ export class ActivityExecutionService {
   constructor(eventBus, gateways = {}) {
     this.eventBus = eventBus;
     this.runtimeGateway = gateways.runtimeGateway || null;
+    this.activityDefinitionStore = gateways.activityDefinitionStore || null;
     this.runners = new Map();
     this._firedTerminal = new Set();
   }
@@ -91,6 +92,10 @@ export class ActivityExecutionService {
     return this.runners.get(instanceId) || null;
   }
 
+  getDebugState(instanceId) {
+    return this.get(instanceId)?.getDebugState() || null;
+  }
+
   /** Public lifecycle/queue surface for custom manager Activities. */
   append(queue, options) {
     if (!queue) throw new Error(t("error.cfb9042df3bb"));
@@ -106,14 +111,40 @@ export class ActivityExecutionService {
   }
 
   update(queue, instanceId, patch) {
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) return false;
+    const instance = queue?.get(instanceId);
+    if (!instance) return false;
+    const definition = this.activityDefinitionStore?.get(instance.activityId);
+    const flowNodeIds = definition?.compiled?.flowNodeIds;
+    if (flowNodeIds && Object.prototype.hasOwnProperty.call(patch, "currentNodeId") && !flowNodeIds.includes(patch.currentNodeId)) return false;
+    if (Object.prototype.hasOwnProperty.call(patch, "status") && !["unresolved", "paused", "failed", "resolved"].includes(patch.status)) return false;
+    if (Object.prototype.hasOwnProperty.call(patch, "breakpointNodeIds")) {
+      if (!Array.isArray(patch.breakpointNodeIds)) return false;
+      const breakpointNodeIds = [...new Set(patch.breakpointNodeIds.map(String))];
+      if (flowNodeIds && breakpointNodeIds.some((nodeId) => !flowNodeIds.includes(nodeId))) return false;
+      patch = { ...patch, breakpointNodeIds };
+    }
     const runner = this.get(instanceId);
-    if (runner && Object.prototype.hasOwnProperty.call(patch, "currentNodeId")) runner.setCurrentNode(patch.currentNodeId);
-    if (runner && Object.prototype.hasOwnProperty.call(patch, "status")) runner.setStatus(patch.status);
+    if (runner && Object.prototype.hasOwnProperty.call(patch, "currentNodeId") && !runner.setCurrentNode(patch.currentNodeId)) return false;
+    if (Object.prototype.hasOwnProperty.call(patch, "breakpointNodeIds")) {
+      if (!Array.isArray(patch.breakpointNodeIds)) return false;
+      if (runner && !runner.setBreakpoints(patch.breakpointNodeIds)) return false;
+    }
+    if (runner && Object.prototype.hasOwnProperty.call(patch, "status")) {
+      if (!runner.setStatus(patch.status)) return false;
+      const { status: _status, ...remainingPatch } = patch;
+      patch = remainingPatch;
+    }
+    if (runner && !Object.keys(patch).length) return true;
     return queue?.update(instanceId, patch) || false;
   }
 
   setLocalVariable(instanceId, key, value) {
     return this.get(instanceId)?.setLocalVariable(key, value) || false;
+  }
+
+  setBreakpoints(instanceId, nodeIds) {
+    return this.get(instanceId)?.setBreakpoints(nodeIds) || false;
   }
 
   complete(queue, instanceId) {

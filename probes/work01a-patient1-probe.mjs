@@ -91,11 +91,10 @@ while (patientInstance.status !== "resolved" && guard++ < 100) {
 
 assert.equal(patientInstance.status, "resolved");
 assert.equal(minutesConsumed, 80, "expected the 4 consumeTime nodes on the all-first-option path to total 80 minutes");
-// text/choice re-emit on each wait re-check (same as blockUntil, see
-// dialogue-node-probe.mjs), so a waited node fires twice: once entering the
-// wait, once on the wake that satisfies it.
-assert.equal(dialogueEvents.filter((e) => e.eventName === "display:text").length, 8);
-assert.equal(dialogueEvents.filter((e) => e.eventName === "display:choice").length, 4);
+// Resuming a text/choice wait consumes its saved continue/selection value and
+// advances without redispatching the same visible line or options.
+assert.equal(dialogueEvents.filter((e) => e.eventName === "display:text").length, 4);
+assert.equal(dialogueEvents.filter((e) => e.eventName === "display:choice").length, 2);
 assert.equal(dialogueEvents.filter((e) => e.eventName === "display:complete").length, 1);
 assert.equal(dialogueEvents.find((e) => e.eventName === "display:complete").payload.displayTo, "his-app");
 assert.ok(dialogueEvents.every((e) => e.payload.instanceId === patientInstance.instanceId), "every dialogue event should carry the running instance's id");

@@ -36,7 +36,8 @@ const SAVE_FORMAT = "cultists-ng-save";
 // v5 added the authoritative GameState snapshot. v6 removes database records
 // from saves. v7 replaces hard-coded keyword/game-state fields with generic
 // content state providers; canonical content remains outside player saves.
-const SAVE_FORMAT_VERSION = 7;
+// v8 persists Activity execution progress, trace, breakpoints, and pause location.
+const SAVE_FORMAT_VERSION = 8;
 
 function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));

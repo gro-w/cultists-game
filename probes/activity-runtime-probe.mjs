@@ -70,7 +70,7 @@ function makeEngine(definitions) {
   const activityDefinitionStore = new ActivityDefinitionStore();
   definitions.forEach((definition) => activityDefinitionStore.register(definition));
   const activityQueueRegistry = new ActivityQueueRegistry();
-  const activityExecutionService = new ActivityExecutionService(eventBus);
+  const activityExecutionService = new ActivityExecutionService(eventBus, { activityDefinitionStore });
   return { eventBus, variableStore, activityDefinitionStore, activityQueueRegistry, activityExecutionService };
 }
 
@@ -252,6 +252,98 @@ function makeEngine(definitions) {
   // must have evaluated to true: (10 + 5) > 12, so the flow must reach endTrue.
   assert.equal(instance.currentNodeId, "endTrue");
   assert.equal(instance.executedNodeIds.includes("initThreshold"), true);
+}
+
+// --- Scenario 6: breakpoints and exact progress survive a queue snapshot ---
+{
+  const breakpointDefinition = {
+    id: "breakpoint-resume",
+    blueprint: {
+      startNodeId: "start",
+      nodes: {
+        start: { id: "start", type: "flowStart", inputs: {} },
+        effect: { id: "effect", type: "setVariable", inputs: { key: "breakpoint.value", value: 42 } },
+        end: { id: "end", type: "activityEnd", inputs: {} },
+      },
+      connections: [
+        { fromNodeId: "start", fromPort: "flowOut", toNodeId: "effect", toPort: "flowIn" },
+        { fromNodeId: "effect", fromPort: "flowOut", toNodeId: "end", toPort: "flowIn" },
+      ],
+    },
+  };
+  const engine = makeEngine([breakpointDefinition]);
+  const queue = engine.activityQueueRegistry.get("main");
+  const instance = queue.append({ activityId: "breakpoint-resume" });
+  assert.equal(engine.activityExecutionService.update(queue, instance.instanceId, { breakpointNodeIds: ["missing-node"] }), false);
+  assert.equal(engine.activityExecutionService.update(queue, instance.instanceId, { breakpointNodeIds: ["effect"] }), true);
+  engine.activityExecutionService.run({
+    queue,
+    definition: engine.activityDefinitionStore.get("breakpoint-resume"),
+    instance,
+    variableStore: engine.variableStore,
+  });
+  assert.equal(instance.status, "paused");
+  assert.equal(instance.currentNodeId, "effect");
+  assert.equal(instance.pausedAtBreakpointId, "effect");
+  assert.equal(engine.variableStore.get("breakpoint.value"), undefined, "a breakpoint stops before its node side effect");
+  assert.equal(instance.executionTrace.at(-1).status, "breakpoint");
+  const savedQueues = engine.activityQueueRegistry.snapshot();
+
+  const restoredEngine = makeEngine([breakpointDefinition]);
+  restoredEngine.activityQueueRegistry.restore(savedQueues);
+  const restoredQueue = restoredEngine.activityQueueRegistry.get("main");
+  const restoredInstance = restoredQueue.get(instance.instanceId);
+  assert.deepEqual(restoredInstance.breakpointNodeIds, ["effect"]);
+  assert.equal(restoredInstance.pausedAtBreakpointId, "effect");
+  assert.deepEqual(restoredInstance.executionTrace, instance.executionTrace);
+  const restoredRunner = restoredEngine.activityExecutionService.run({
+    queue: restoredQueue,
+    definition: restoredEngine.activityDefinitionStore.get("breakpoint-resume"),
+    instance: restoredInstance,
+    variableStore: restoredEngine.variableStore,
+  });
+  assert.ok(restoredRunner, "restore must reattach a paused instance to a runner");
+  assert.equal(restoredEngine.variableStore.get("breakpoint.value"), undefined);
+  assert.equal(restoredEngine.activityExecutionService.update(restoredQueue, restoredInstance.instanceId, { status: "unresolved" }), true);
+  assert.equal(restoredEngine.variableStore.get("breakpoint.value"), 42);
+  assert.equal(restoredInstance.status, "resolved");
+  assert.equal(restoredInstance.executionTrace.filter((step) => step.nodeId === "effect" && step.status === "executed").length, 1);
+  assert.equal(restoredInstance.executionStep, restoredInstance.executionTrace.length);
+}
+
+// --- Scenario 7: debugger step selection cancels a stale wait and resumes at the selected node ---
+{
+  const seekDefinition = {
+    id: "debugger-seek",
+    blueprint: {
+      startNodeId: "start",
+      nodes: {
+        start: { id: "start", type: "flowStart", inputs: {} },
+        wait: { id: "wait", type: "blockUntil", inputs: { key: "approved", equals: true } },
+        effect: { id: "effect", type: "setVariable", inputs: { key: "debug-seek.value", value: 1 } },
+        end: { id: "end", type: "activityEnd", inputs: {} },
+      },
+      connections: [
+        { fromNodeId: "start", fromPort: "flowOut", toNodeId: "wait", toPort: "flowIn" },
+        { fromNodeId: "wait", fromPort: "flowOut", toNodeId: "effect", toPort: "flowIn" },
+        { fromNodeId: "effect", fromPort: "flowOut", toNodeId: "end", toPort: "flowIn" },
+      ],
+    },
+  };
+  const engine = makeEngine([seekDefinition]);
+  const queue = engine.activityQueueRegistry.get("main");
+  const instance = queue.append({ activityId: seekDefinition.id });
+  engine.activityExecutionService.run({ queue, definition: engine.activityDefinitionStore.get(seekDefinition.id), instance, variableStore: engine.variableStore });
+  assert.equal(instance.waitingNodeId, "wait");
+  assert.equal(engine.activityExecutionService.update(queue, instance.instanceId, { currentNodeId: "effect" }), true);
+  assert.equal(instance.status, "paused");
+  assert.equal(instance.waitingNodeId, null);
+  assert.equal(instance.executionTrace.at(-1).status, "debug-seek");
+  assert.equal(engine.activityExecutionService.update(queue, instance.instanceId, { status: "unresolved" }), true);
+  assert.equal(instance.status, "resolved");
+  assert.equal(engine.variableStore.get("debug-seek.value"), 1);
+  engine.variableStore.set("approved", true);
+  assert.equal(engine.variableStore.get("debug-seek.value"), 1, "old wait subscriptions must not resume a manually selected step");
 }
 
 // --- Scenario: openWindow node calls windowGateway once and does not

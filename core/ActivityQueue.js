@@ -101,6 +101,14 @@ export class ActivityQueue {
       }
       seen.add(entry.instanceId);
       const restored = cloneActivityInstance(entry);
+      restored.executedNodeIds = Array.isArray(restored.executedNodeIds) ? restored.executedNodeIds : [];
+      restored.executionTrace = Array.isArray(restored.executionTrace) ? restored.executionTrace : [];
+      restored.executionStep = Math.max(
+        Number.isInteger(restored.executionStep) && restored.executionStep >= 0 ? restored.executionStep : 0,
+        restored.executionTrace.length,
+      );
+      restored.breakpointNodeIds = Array.isArray(restored.breakpointNodeIds) ? [...new Set(restored.breakpointNodeIds.map(String))] : [];
+      restored.pausedAtBreakpointId = typeof restored.pausedAtBreakpointId === "string" ? restored.pausedAtBreakpointId : null;
       if (!restored.currentStep && restored.currentNodeId) {
         restored.currentStep = { nodeId: restored.currentNodeId, status: restored.waitingNodeId ? "waiting" : "pending" };
       }

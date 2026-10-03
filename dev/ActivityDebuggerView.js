@@ -92,8 +92,35 @@ export class ActivityDebuggerView {
     const row = document.createElement("tr");
     const definition = this.activityDefinitionStore?.get(entry.activityId);
     const nodeSelect = document.createElement("select");
-    Object.values(definition?.blueprint?.nodes || {}).forEach((node) => { const option = new Option(`${node.id} · ${node.type}`, node.id); option.selected = node.id === entry.currentNodeId; nodeSelect.add(option); });
+    const executableNodeIds = definition?.compiled?.debugInfo?.nodeIds || Object.keys(definition?.blueprint?.nodes || {});
+    executableNodeIds.forEach((nodeId) => {
+      const node = definition?.blueprint?.nodes?.[nodeId];
+      if (!node) return;
+      const option = new Option(`${node.id} · ${node.type}`, node.id);
+      option.selected = node.id === entry.currentNodeId;
+      nodeSelect.add(option);
+    });
+    nodeSelect.disabled = entry.status === "resolved";
     nodeSelect.addEventListener("change", () => this.activityExecutionService?.update(queue, entry.instanceId, { currentNodeId: nodeSelect.value }));
+    const stepControl = document.createElement("div");
+    stepControl.className = "ng-debugger-step-control";
+    stepControl.append(nodeSelect);
+    const breakpointLabel = document.createElement("label");
+    const breakpointToggle = document.createElement("input");
+    breakpointToggle.type = "checkbox";
+    breakpointToggle.disabled = entry.status === "resolved";
+    breakpointToggle.checked = (entry.breakpointNodeIds || []).includes(nodeSelect.value);
+    breakpointToggle.addEventListener("change", () => {
+      const nodeIds = new Set(entry.breakpointNodeIds || []);
+      if (breakpointToggle.checked) nodeIds.add(nodeSelect.value);
+      else nodeIds.delete(nodeSelect.value);
+      this.activityExecutionService?.update(queue, entry.instanceId, { breakpointNodeIds: [...nodeIds] });
+    });
+    nodeSelect.addEventListener("change", () => {
+      breakpointToggle.checked = (this.activityQueueRegistry?.get(queue.queueId)?.get(entry.instanceId)?.breakpointNodeIds || []).includes(nodeSelect.value);
+    });
+    breakpointLabel.append(breakpointToggle, document.createTextNode(t("dev.activityDebugger.breakpoint")));
+    stepControl.append(breakpointLabel);
     const statusSelect = document.createElement("select");
     ["unresolved", "paused", "failed", "resolved"].forEach((status) => { const option = new Option(status, status); option.selected = status === entry.status; statusSelect.add(option); });
     statusSelect.addEventListener("change", () => this.activityExecutionService?.update(queue, entry.instanceId, { status: statusSelect.value }));
@@ -107,8 +134,37 @@ export class ActivityDebuggerView {
       input.addEventListener("change", () => { let next = input.value; try { next = typeof value === "object" ? JSON.parse(next) : next; } catch { this.statusEl.textContent = t("legacy.3017a64eb407"); return; } this.activityExecutionService?.setLocalVariable(entry.instanceId, key, next); });
       const label = document.createElement("label"); label.textContent = `${key}: `; label.appendChild(input); local.appendChild(label);
     });
+    const compiled = definition?.compiled?.debugInfo;
+    if (compiled) {
+      const liveState = this.activityExecutionService?.getDebugState(entry.instanceId);
+      const trace = document.createElement("details");
+      const traceSummary = document.createElement("summary");
+      traceSummary.textContent = `${t("dev.activityDebugger.stepTrace")} (${compiled.nodeIds.length})`;
+      const traceData = document.createElement("pre");
+      traceData.textContent = JSON.stringify({
+        currentNodeId: liveState?.currentNodeId ?? entry.currentNodeId ?? null,
+        currentStep: liveState?.currentStep ?? entry.currentStep ?? null,
+        waitingNodeId: liveState?.waitingNodeId ?? entry.waitingNodeId ?? null,
+        executedNodeIds: liveState?.executedNodeIds ?? entry.executedNodeIds ?? [],
+        executionStep: liveState?.executionStep ?? entry.executionStep ?? 0,
+        executionTrace: liveState?.executionTrace ?? entry.executionTrace ?? [],
+        breakpointNodeIds: liveState?.breakpointNodeIds ?? entry.breakpointNodeIds ?? [],
+        pausedAtBreakpointId: liveState?.pausedAtBreakpointId ?? entry.pausedAtBreakpointId ?? null,
+        localVariables: liveState?.localVariables ?? entry.localVariables ?? {},
+        sourceMap: compiled.sourceMap,
+      }, null, 2);
+      trace.append(traceSummary, traceData);
+      const generated = document.createElement("details");
+      const generatedSummary = document.createElement("summary");
+      generatedSummary.textContent = t("dev.activityDebugger.generatedCode");
+      const generatedSource = document.createElement("pre");
+      generatedSource.textContent = compiled.source;
+      generated.append(generatedSummary, generatedSource);
+      trace.append(generated);
+      local.append(trace);
+    }
     const remove = document.createElement("button"); remove.textContent = t("legacy.e1ab0153ef20"); remove.addEventListener("click", () => this.activityQueueRegistry.removeEntry(queue.queueId, entry.instanceId));
-    const cells = [entry.instanceId, entry.activityId, statusSelect, nodeSelect, local, remove];
+    const cells = [entry.instanceId, entry.activityId, statusSelect, stepControl, local, remove];
     cells.forEach((value) => { const cell = document.createElement("td"); if (typeof value === "string") cell.textContent = value; else cell.appendChild(value); row.appendChild(cell); });
     return row;
   }

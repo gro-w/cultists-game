@@ -59,6 +59,8 @@
 - CL2 内嵌值绑定必须递归解析；自定义流程节点的隐式 `default` 必须映射到其声明的首个流程出口，framework 宏不得调用未注册的领域 API。
 - 显示节点的 canonical `text` 调用使用 `displayTo, speaker, text, ...` 顺序；动态窗口组件复制必须合并模板事件，不能因生命周期事件覆盖 `onAdd`/`onRemove` 等交互蓝图。
 - CL2（Cultists Blueprint & Script Language 2）统一脚本图语言规范见 [`cl2-language.md`](cl2-language.md)。Activity 运行时、定义存储和编辑器均使用 CL2；旧 JSON 仅作为迁移审计输入，不是生产 Activity source。CL2 采用显式节点 ID、`option<x>` 分支、`default` 默认出口、纯值函数和 `if` 回边。
+- Activity 定义加载时必须先校验 CL2，再将流程图编译为 JavaScript 执行器；生成代码只包含安全转义的稳定节点 ID，节点副作用仍通过 core 的通用 ActivityRunner 网关执行并保留等待、检查点和恢复语义。编译结果须保留稳定步骤 ID、源码映射和生成源码供开发人员模式调试，不写入存档。
+- Activity 实例的当前节点、执行步骤/trace、已执行节点、等待位置和断点必须随队列存档；断点使用稳定节点 ID，恢复时先重建 runner 并停在断点，显式继续后跳过该断点一次再执行，禁止在恢复过程中重放已完成副作用。
 
 
 ## 数据、版权和字体

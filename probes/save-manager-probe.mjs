@@ -38,6 +38,22 @@ const waitingDefinition = {
   },
 };
 
+const breakpointDefinition = {
+  id: "breakpoint-save-restore",
+  blueprint: {
+    startNodeId: "start",
+    nodes: {
+      start: { id: "start", type: "flowStart", inputs: {} },
+      effect: { id: "effect", type: "setVariable", inputs: { key: "breakpoint.effect", value: 42 } },
+      end: { id: "end", type: "activityEnd", inputs: {} },
+    },
+    connections: [
+      { fromNodeId: "start", fromPort: "flowOut", toNodeId: "effect", toPort: "flowIn" },
+      { fromNodeId: "effect", fromPort: "flowOut", toNodeId: "end", toPort: "flowIn" },
+    ],
+  },
+};
+
 function makeSession() {
   const eventBus = new EventBus();
   const gameClock = new GameClock(eventBus);
@@ -56,6 +72,7 @@ function makeSession() {
   dataStore.createRecord("keywords", { id: "fever", content: "发热" });
   const activityDefinitionStore = new ActivityDefinitionStore();
   activityDefinitionStore.register(waitingDefinition);
+  activityDefinitionStore.register(breakpointDefinition);
   const activityQueueRegistry = new ActivityQueueRegistry();
   const activityExecutionService = new ActivityExecutionService(eventBus);
   const windowManager = new WindowManager(eventBus, { storage: { getItem: () => null, setItem: () => {} } });
@@ -83,19 +100,21 @@ function makeSession() {
 
   function resumePendingActivities() {
     activityQueueRegistry.list().forEach((queue) => {
-      const instance = queue.current();
-      if (!instance) return;
-      const definition = activityDefinitionStore.get(instance.activityId);
-      if (!definition) return;
-      activityExecutionService.run({
-        queue,
-        definition,
-        instance,
-        variableStore,
-        timeGateway: (minutes) => gameClock.advance(minutes),
-      apiGateway: { call: (apiId, payload) => { if (apiId === "engine.consumeTime") return gameClock.advance(payload.minutes); throw new Error(`Unexpected API ${apiId}`); } },
-        dbGateway: dataStore,
-        pvGateway: publicVariableManager,
+      const pausedInstances = queue.list({ status: "paused" });
+      const candidates = pausedInstances.length ? pausedInstances : [queue.current()].filter(Boolean);
+      candidates.forEach((instance) => {
+        const definition = activityDefinitionStore.get(instance.activityId);
+        if (!definition) return;
+        activityExecutionService.run({
+          queue,
+          definition,
+          instance,
+          variableStore,
+          timeGateway: (minutes) => gameClock.advance(minutes),
+          apiGateway: { call: (apiId, payload) => { if (apiId === "engine.consumeTime") return gameClock.advance(payload.minutes); throw new Error(`Unexpected API ${apiId}`); } },
+          dbGateway: dataStore,
+          pvGateway: publicVariableManager,
+        });
       });
     });
   }
@@ -146,7 +165,7 @@ function makeSession() {
 
   const saved = session.saveManager.snapshot();
   assert.equal(saved.format, "cultists-ng-save");
-  assert.equal(saved.version, 7);
+  assert.equal(saved.version, 8);
   assert.equal(saved.createdAtGameTime, 110);
   assert.equal(Object.hasOwn(saved.state, "databases"), false, "game data must not be embedded in saves");
   assert.equal(Object.hasOwn(saved.state.variables, "calendar:days"), false, "derived calendar UI data must not be saved");
@@ -184,6 +203,44 @@ function makeSession() {
   assert.equal(terminalCount, 1);
 }
 
+// --- breakpoint progress survives the actual SaveManager restore path ------
+{
+  const session = makeSession();
+  const queue = session.activityQueueRegistry.get("main");
+  const definition = session.activityDefinitionStore.get("breakpoint-save-restore");
+  const instance = queue.append({ activityId: definition.id });
+  assert.equal(session.activityExecutionService.update(queue, instance.instanceId, { breakpointNodeIds: ["effect"] }), true);
+  session.activityExecutionService.run({
+    queue,
+    definition,
+    instance,
+    variableStore: session.variableStore,
+    timeGateway: (minutes) => session.gameClock.advance(minutes),
+  });
+  assert.equal(instance.status, "paused");
+  assert.equal(instance.currentNodeId, "effect");
+  assert.equal(session.variableStore.get("breakpoint.effect"), undefined);
+  const queuedInstance = queue.append({ activityId: definition.id });
+  const saved = session.saveManager.snapshot();
+
+  const restored = makeSession();
+  restored.saveManager.restore(saved);
+  const restoredQueue = restored.activityQueueRegistry.get("main");
+  const restoredInstance = restoredQueue.get(instance.instanceId);
+  assert.deepEqual(restoredInstance.breakpointNodeIds, ["effect"]);
+  assert.equal(restoredInstance.pausedAtBreakpointId, "effect");
+  assert.equal(restoredInstance.currentNodeId, "effect");
+  assert.deepEqual(restoredInstance.executionTrace, instance.executionTrace);
+  assert.ok(restored.activityExecutionService.get(instance.instanceId), "restore must reattach paused runners");
+  assert.equal(restored.activityExecutionService.get(queuedInstance.instanceId), null, "a paused queue head must keep later entries from starting");
+  assert.equal(restoredQueue.get(queuedInstance.instanceId).status, "unresolved");
+  assert.equal(restored.variableStore.get("breakpoint.effect"), undefined);
+  assert.equal(restored.activityExecutionService.update(restoredQueue, instance.instanceId, { status: "unresolved" }), true);
+  assert.equal(restored.variableStore.get("breakpoint.effect"), 42);
+  assert.equal(restoredInstance.status, "resolved");
+  assert.equal(restoredInstance.executionTrace.filter((step) => step.nodeId === "effect" && step.status === "executed").length, 1);
+}
+
 // --- a corrupt/invalid save must not overwrite current valid state ----------
 {
   const session = makeSession();
@@ -194,6 +251,7 @@ function makeSession() {
   assert.throws(() => session.saveManager.restore(null), /valid object/);
   assert.throws(() => session.saveManager.restore({ format: "something-else" }), /Unknown save format/);
   assert.throws(() => session.saveManager.restore({ format: "cultists-ng-save", version: 999 }), /Unsupported save version/);
+  assert.throws(() => session.saveManager.restore({ format: "cultists-ng-save", version: 7 }), /Unsupported save version/);
   assert.throws(() => session.saveManager.restore({ format: "cultists-ng-save", version: 3 }), /Unsupported save version/);
 
   // A structurally-valid-looking envelope with an internally-inconsistent

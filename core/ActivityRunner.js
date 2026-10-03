@@ -1,6 +1,7 @@
 import { t } from "./i18n/index.js";
+import { compileCl2Activity } from "./Cl2Compiler.js";
 /**
- * ActivityRunner - node-by-node interpreter for a single Activity
+ * ActivityRunner - executes a JIT-compiled CL2 flow graph for one Activity
  * instance's Blueprint (plan §13 Phase 2). Kept generic: the only node
  * types understood here are the ones in ActivityNodeRegistry.js.
  *
@@ -257,10 +258,24 @@ export function createActivityRunner({
   onComplete = () => {},
 } = {}) {
   const blueprint = definition.blueprint;
+  const compiledActivity = definition.compiled?.mode === "javascript" && definition.compiled.blueprint === blueprint
+    ? definition.compiled
+    : compileCl2Activity(blueprint, { maxSteps: MAX_STEPS });
   let cancelled = false;
-  let paused = false;
+  let paused = instance.status === "paused";
   let waitUnsubscribe = null;
   let lastDialogueDisplayTo = null;
+  instance.executedNodeIds = Array.isArray(instance.executedNodeIds) ? instance.executedNodeIds : [];
+  instance.executionTrace = Array.isArray(instance.executionTrace) ? instance.executionTrace : [];
+  instance.executionStep = Math.max(
+    Number.isInteger(instance.executionStep) && instance.executionStep >= 0 ? instance.executionStep : 0,
+    instance.executionTrace.length,
+  );
+  instance.breakpointNodeIds = Array.isArray(instance.breakpointNodeIds)
+    ? [...new Set(instance.breakpointNodeIds.map(String))].filter((nodeId) => compiledActivity.flowNodeIds.includes(nodeId))
+    : [];
+  instance.pausedAtBreakpointId = typeof instance.pausedAtBreakpointId === "string" ? instance.pausedAtBreakpointId : null;
+  let lastTraceEntry = instance.executionTrace.at(-1) || null;
   const globalVariableStore = variableStore;
   const declaredLocals = blueprint.localVariables && typeof blueprint.localVariables === "object" ? blueprint.localVariables : {};
   if (!instance.localVariables || Object.keys(instance.localVariables).length === 0) {
@@ -285,11 +300,21 @@ export function createActivityRunner({
     if (!instance.executedNodeIds.includes(node.id)) instance.executedNodeIds.push(node.id);
   }
 
+  function recordExecutionStep(nodeId, status) {
+    instance.executionStep += 1;
+    const step = { step: instance.executionStep, nodeId, status };
+    instance.executionTrace.push(step);
+    lastTraceEntry = step;
+    return step;
+  }
+
   function finish(reason) {
     if (instance.status === "resolved") return;
     instance.status = "resolved";
     instance.resolutionReason = reason;
     instance.waitingNodeId = null;
+    if (lastTraceEntry && ["running", "waiting", "breakpoint"].includes(lastTraceEntry.status)) lastTraceEntry.status = reason;
+    instance.pausedAtBreakpointId = null;
     if (instance.currentStep) instance.currentStep = { ...instance.currentStep, status: reason };
     if (lastDialogueDisplayTo) {
       eventGateway("display:complete", {
@@ -683,50 +708,53 @@ export function createActivityRunner({
     waitUnsubscribe = () => unsubscribers.forEach((fn) => fn());
   }
 
-  function run(nodeId) {
+  function run(nodeId, skipBreakpointNodeId = null) {
     if (cancelled || paused || instance.status === "resolved") return;
-    let current = nodeId;
-    let guard = 0;
-    let isResumeEntry = true;
-    while (current && guard++ < MAX_STEPS) {
-      const node = blueprint.nodes[current];
-      if (!node) throw new Error(`Unknown flow node: ${current}`);
-      instance.currentNodeId = current;
-      instance.currentStep = { nodeId: current, type: node.type, status: "running" };
-
-      // The already-executed skip only applies to the node we are resuming
-      // *into* after a save/restore (e.g. currentNodeId pointed at a
-      // consumeTime whose side effect already fired). Nodes reached later in
-      // this same run — including loop bodies revisited many times — must
-      // always execute, or a loop body's setVariable would only ever fire once.
-      if (isResumeEntry && ONE_SHOT_NODE_TYPES.has(node.type) && instance.executedNodeIds.includes(current)) {
-        isResumeEntry = false;
-        current = nextFlow(blueprint, node);
-        continue;
-      }
-      isResumeEntry = false;
-
-      const result = execute(node);
-      if (result?.wait) {
+    const result = compiledActivity.run(nodeId, {
+      executeNode(current, node, isResumeEntry) {
+        if (!node) throw new Error(`Unknown flow node: ${current}`);
+        instance.currentNodeId = current;
+        if (instance.breakpointNodeIds.includes(current) && !(isResumeEntry && current === skipBreakpointNodeId)) {
+          const step = recordExecutionStep(current, "breakpoint");
+          paused = true;
+          instance.status = "paused";
+          instance.pausedAtBreakpointId = current;
+          instance.currentStep = { nodeId: current, type: node.type, status: "breakpoint", step: step.step };
+          onCheckpoint(instance);
+          return { stop: true, breakpoint: true };
+        }
+        // The already-executed skip only applies to the node we are resuming
+        // into after a save/restore. Nodes reached later in this run—including
+        // loop bodies revisited many times—must still execute.
+        if (isResumeEntry && ONE_SHOT_NODE_TYPES.has(node.type) && instance.executedNodeIds.includes(current)) {
+          const step = recordExecutionStep(current, "skipped");
+          instance.currentStep = { nodeId: current, type: node.type, status: "skipped", step: step.step };
+          return { skip: true, next: nextFlow(blueprint, node) };
+        }
+        const step = recordExecutionStep(current, "running");
+        instance.currentStep = { nodeId: current, type: node.type, status: "running", step: step.step };
+        return execute(node);
+      },
+      onWait(current, node) {
+        if (lastTraceEntry?.nodeId === current) lastTraceEntry.status = "waiting";
         instance.waitingNodeId = node.id;
-        instance.currentStep = { nodeId: node.id, type: node.type, status: "waiting" };
+        instance.currentStep = { nodeId: node.id, type: node.type, status: "waiting", step: lastTraceEntry?.step };
         subscribeWait(node);
         onCheckpoint(instance);
-        return;
-      }
-      if (result?.stop) return;
-
-      markExecuted(node);
-      instance.waitingNodeId = null;
-      current = result?.next ?? null;
-      instance.currentNodeId = current;
-      instance.currentStep = current
-        ? { nodeId: current, type: blueprint.nodes[current]?.type || null, status: "pending" }
-        : null;
-      onCheckpoint(instance);
-    }
-    if (guard >= MAX_STEPS) throw new Error(t("error.eba2b6ab7973"));
-    finish("completed");
+      },
+      afterStep(current, node, next) {
+        markExecuted(node);
+        if (lastTraceEntry?.nodeId === current) lastTraceEntry.status = "executed";
+        instance.waitingNodeId = null;
+        instance.currentNodeId = next;
+        instance.currentStep = next
+          ? { nodeId: next, type: blueprint.nodes[next]?.type || null, status: "pending", step: instance.executionStep + 1 }
+          : null;
+        onCheckpoint(instance);
+      },
+    });
+    if (result.status === "limit") throw new Error(t("error.eba2b6ab7973"));
+    if (result.status === "completed") finish("completed");
   }
 
   function start() {
@@ -737,16 +765,19 @@ export function createActivityRunner({
     if (instance.status === "resolved") return false;
     paused = true;
     instance.status = "paused";
+    if (instance.currentStep) instance.currentStep = { ...instance.currentStep, status: "paused" };
     onCheckpoint(instance);
     return true;
   }
 
   function resume() {
     if (!paused) return false;
+    const breakpointNodeId = instance.pausedAtBreakpointId;
+    instance.pausedAtBreakpointId = null;
     paused = false;
     instance.status = "unresolved";
     onCheckpoint(instance);
-    run(instance.currentNodeId);
+    run(instance.currentNodeId, breakpointNodeId);
     return true;
   }
 
@@ -771,7 +802,18 @@ export function createActivityRunner({
   }
 
   function setCurrentNode(nodeId) {
-    if (!blueprint.nodes[nodeId]) return false;
+    if (instance.status === "resolved") return false;
+    if (!compiledActivity.flowNodeIds.includes(nodeId)) return false;
+    if (waitUnsubscribe) {
+      const unsubscribe = waitUnsubscribe;
+      waitUnsubscribe = null;
+      unsubscribe();
+    }
+    paused = true;
+    instance.status = "paused";
+    if (["waiting", "breakpoint"].includes(lastTraceEntry?.status)) lastTraceEntry.status = "debug-seek";
+    instance.waitingNodeId = null;
+    instance.pausedAtBreakpointId = null;
     instance.currentNodeId = nodeId;
     instance.currentStep = { nodeId, type: blueprint.nodes[nodeId].type, status: "pending" };
     onCheckpoint(instance);
@@ -781,13 +823,41 @@ export function createActivityRunner({
   function setStatus(status) {
     if (!["unresolved", "paused", "failed", "resolved"].includes(status)) return false;
     if (status === "paused") { paused = true; instance.status = "paused"; }
+    else if (status === "unresolved" && paused) return resume();
     else if (status === "unresolved") { paused = false; instance.status = "unresolved"; }
     else instance.status = status;
     onCheckpoint(instance);
     return true;
   }
 
-  return { start, pause, resume, cancel, setLocalVariable, setCurrentNode, setStatus, instance };
+  function setBreakpoints(nodeIds) {
+    if (!Array.isArray(nodeIds)) return false;
+    const normalized = [...new Set(nodeIds.map(String))];
+    if (normalized.some((nodeId) => !compiledActivity.flowNodeIds.includes(nodeId))) return false;
+    instance.breakpointNodeIds = normalized;
+    onCheckpoint(instance);
+    return true;
+  }
+
+  function getDebugState() {
+    return {
+      activityId: definition.id || null,
+      instanceId: instance.instanceId,
+      status: instance.status,
+      currentNodeId: instance.currentNodeId || null,
+      currentStep: instance.currentStep ? { ...instance.currentStep } : null,
+      waitingNodeId: instance.waitingNodeId || null,
+      executedNodeIds: [...instance.executedNodeIds],
+      executionStep: instance.executionStep,
+      executionTrace: structuredClone(instance.executionTrace),
+      breakpointNodeIds: [...instance.breakpointNodeIds],
+      pausedAtBreakpointId: instance.pausedAtBreakpointId,
+      localVariables: structuredClone(instance.localVariables || {}),
+      compiled: compiledActivity.debugInfo,
+    };
+  }
+
+  return { start, pause, resume, cancel, setLocalVariable, setCurrentNode, setStatus, setBreakpoints, getDebugState, instance };
 }
 
 export default createActivityRunner;

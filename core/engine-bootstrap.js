@@ -230,7 +230,7 @@ export async function bootstrap(rootEl) {
   apiGateway.register("engine.stateBoundary.toggle", () => stateBoundary.toggleDuty());
   apiGateway.register("engine.stateBoundary.sleep", () => stateBoundary.sleep());
   apiGateway.register("engine.stateBoundary.location", ({ location } = {}) => stateBoundary.requestLocation(location));
-  const execution = new ActivityExecutionService(eventBus, { runtimeGateway });
+  const execution = new ActivityExecutionService(eventBus, { runtimeGateway, activityDefinitionStore: activityDefinitions });
 
   apiGateway.register("window.componentMutation", ({ componentId, action, max = 5 } = {}) => {
     const allowed = new Set(["add", "remove"]);
@@ -334,6 +334,16 @@ export async function bootstrap(rootEl) {
       pvGateway: publicVariables, eventStateGateway: eventState, apiGateway,
     });
   }
+  saveManager.resumePendingActivities = () => {
+    for (const queue of queues.list()) {
+      const pausedInstances = queue.list({ status: "paused" });
+      for (const instance of pausedInstances) {
+        const definition = activityDefinitions.get(instance.activityId);
+        if (definition) executeActivity({ queue, definition, instance });
+      }
+      if (!pausedInstances.length && queue.current()) consumer.consume(queue.queueId);
+    }
+  };
   function runInlineBlueprint(queue, activityId, blueprint) {
     const validation = validateBlueprint(blueprint);
     if (!validation.ok) throw new Error(`Invalid blueprint ${activityId}: ${validation.errors.join("；")}`);

@@ -2,6 +2,7 @@ import { t } from "./i18n/index.js";
 import { validateBlueprint } from "./ActivityValidator.js";
 import { DataLoader } from "./DataLoader.js";
 import { validateCl2 } from "./Cl2Validator.js";
+import { compileCl2Activity } from "./Cl2Compiler.js";
 
 /**
  * ActivityDefinitionStore - single owner of Activity *definitions*
@@ -21,7 +22,13 @@ export class ActivityDefinitionStore {
     if (!definition || !definition.id) throw new Error(t("error.6ce7ea0c5850"));
     const validation = validateBlueprint(definition.blueprint);
     if (!validation.ok) throw new Error(`Invalid in-memory blueprint for activity "${definition.id}": ${validation.errors.join("；")}`);
-    const registered = { ...definition, format: definition.format || "graph", blueprint: validation.blueprint };
+    const blueprint = validation.blueprint;
+    const registered = {
+      ...definition,
+      format: definition.format || "graph",
+      blueprint,
+      compiled: compileCl2Activity(blueprint),
+    };
     this._definitions.set(definition.id, registered);
     return registered;
   }
@@ -33,7 +40,16 @@ export class ActivityDefinitionStore {
       const details = result.diagnostics.map((item) => `${item.code}: ${item.message}`).join("；");
       throw new Error(`Invalid CL2 activity "${id}": ${details}`);
     }
-    const registered = { id, ...metadata, source, sourcePath, format: "CL2", graph: result.graph, blueprint: result.graph };
+    const registered = {
+      id,
+      ...metadata,
+      source,
+      sourcePath,
+      format: "CL2",
+      graph: result.graph,
+      blueprint: result.graph,
+      compiled: compileCl2Activity(result.graph),
+    };
     this._definitions.set(id, registered);
     return registered;
   }

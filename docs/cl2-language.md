@@ -20,18 +20,20 @@ CL2 是一种面向蓝图图结构的脚本化文本语言。它使用接近 C/C
 - 文本中的每个 `option`、`default` 都能直接对应一个流程端口
 - 纯函数表达式直接对应数值节点和值边
 - 图编辑器可以修改 CL2 文本中的布局和连接，而不需要维护第二份 JSON 图定义
-- 运行时可以把 CL2 解析为内存中的 Blueprint Graph 后直接执行
+- Activity 加载时可以把已验证的 CL2 流程图即时编译为 JavaScript 执行器
 - 不把 CL2 编译成另一种 canonical JSON，也不要求从 JSON 反编译回 CL2
 
-实现仍然需要词法解析、语法解析、端口验证和图验证，但这些步骤的结果直接是运行时和编辑器共用的 Blueprint Graph。
+实现仍然需要词法解析、语法解析、端口验证和图验证。解析图供运行时、编译器和编辑器共用；JIT 生成的 JavaScript 只存在内存中，不取代 canonical CL2 源码。
 
 ```text
 CL2 source
     ↓ parse + validate
 Blueprint Graph
-    ↓
-Activity Runtime / Graph Editor
+    ├─→ JavaScript flow executor → Activity Runtime
+    └─→ Graph Editor
 ```
+
+编译结果保留稳定步骤 ID、节点到生成源码行/端口/流程目标的 source map 和生成源码，供开发人员模式查看；Activity Runner 同时公开当前步骤、等待状态、已执行节点和实例本地变量。调试器通过相同稳定节点 ID 选择执行位置并设置断点。编译与调试元数据仅驻留内存，不写入存档或覆盖 canonical CL2 文件；Activity 实例的执行进度、trace、已执行节点、断点列表和暂停断点 ID 属于运行状态，随队列存档保存。恢复后 runner 停在已保存断点，继续时只跳过该断点本身一次再执行节点；其他已完成的一次性副作用仍由实例的 executed-node 状态防止重放。
 
 CL2 不是按文件顺序执行的普通脚本。文件中的执行关系由 `option<x>`、`default` 和纯值依赖决定。
 
@@ -568,7 +570,7 @@ after: end();
 
 `continue` 是回到检查节点的普通边，`break` 是连接到循环外部的普通边，不设置特殊语句或特殊节点。
 
-运行时不使用 JavaScript `while` 执行 CL2 循环，而是逐节点沿普通流程边执行。这样循环可以被 Activity 暂停、保存、恢复和调试。
+CL2 的循环语义仍是普通流程图回边，不会被改写成不可中断的业务循环。JIT 执行器逐个调度节点，并在节点间提交检查点；因此循环仍可被 Activity 暂停、保存、恢复和调试。
 
 验证器应识别流程图中的环。建议默认要求可达循环包含一个能够离开循环的 `if` 控制节点；没有条件出口的无限环应报告验证错误，只有明确声明允许无限循环时才放行。
 

@@ -7,13 +7,14 @@
 ## 主要特点
 
 - 原生 HTML、CSS 和 ES modules，无框架、无 bundler、无构建步骤
-- CL2（Cultists Blueprint & Script Language 2）统一脚本图语言：Activity 运行时和编辑器直接使用 `.CL2.txt`，以显式节点、`option<x>`、`default` 和纯值表达式表示蓝图图结构
+- CL2（Cultists Blueprint & Script Language 2）统一脚本图语言：Activity 加载时校验并即时编译为 JavaScript 执行器；`.CL2.txt` 仍是唯一 canonical 源码，编译后的流程保留 Activity 等待、检查点、保存与恢复能力
 
 - Windows 95 风格桌面、任务栏、开始菜单、窗口和数据驱动应用
 - 医院工作与宿舍生活两种场景，以及工作、社交、管理器和主活动队列
 - 确定性的游戏时钟：普通行动默认推进 20 分钟，睡眠和跨日按明确边界结算
 - 患者诊疗、技能检定、SAN 变化、物品调查、法术、关键词笔记本和多种结局
 - 开发模式、canonical 数据编辑器、运行时调试器和确定性探针
+- Activity 调试器基于 JIT 步骤映射选择执行节点、设置断点并查看本地变量及生成 JavaScript；执行步骤、trace 与断点随存档恢复，支持从断点继续且不重复已完成副作用
 - Core 与开发人员模式 i18n locale 模块、语言管理器和蓝图语言节点；用户可见字符串集中存放于 `core/i18n/xx-xx.js`
 - 数据驱动设置窗口：可调整 BGM 音量、笔记本排序、阶段切换确认和界面语言
 - 内嵌蓝图同样使用 CL2：窗口事件、物品活动和自定义蓝图节点在 JSON 中保存为 `{ "cl2": "..." }`，运行时由 `DataLoader` 解码，开发编辑器保存时重新编码

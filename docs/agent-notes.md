@@ -28,7 +28,7 @@ media/                     历史宣传资源和设计稿
 
 当前 manifest 的主要连接关系：`game-manifest.json` → `framework-manifest.json`、`activity-manifest.json`、窗口 manifest、数据库、公共变量、本地变量和 Activity 列表。默认 Activity 是 `default`，队列定义包含 `work`、`social`、`managers`、`main` 以及窗口/Widget/桌面事件队列。
 
-CL2（Cultists Blueprint & Script Language 2）是当前 Activity 的生产脚本图格式。`core/Cl2Parser.js`、`core/Cl2Validator.js` 和 `core/Cl2Serializer.js` 提供统一解析、验证、运行时图和编辑器回写；`data/activity-manifest.json` 的 171 个 Activity 均指向 `.CL2.txt`。旧 JSON 仅保留为迁移审计输入。
+CL2（Cultists Blueprint & Script Language 2）是当前 Activity 的生产脚本图格式。`core/Cl2Parser.js`、`core/Cl2Validator.js` 和 `core/Cl2Serializer.js` 提供统一解析、验证和编辑器回写；`core/Cl2Compiler.js` 在定义加载时把已验证的流程图编译成 JavaScript 状态机，并由 `ActivityRunner` 执行。生成代码只嵌入安全转义的节点 ID，副作用仍经通用节点执行器、网关和检查点处理，因此等待、循环、保存/恢复语义保持不变。编译结果同时保留 `debugInfo.nodeIds`、节点到生成源码行/端口/流程目标的 `sourceMap` 和生成源码；Activity Runner 的 `getDebugState()` 暴露当前步骤、等待状态、已执行节点和实例本地变量。开发人员模式可选择可执行流程步骤、设置节点断点、检查进度与变量并展开查看生成源码；编译/调试元数据只在内存中，而实例的 `executionStep`、`executionTrace`、断点列表/暂停节点、当前节点和已执行节点随 Activity 队列存档。存档版本 v8 开始持久化这些进度字段；恢复后重新挂接暂停 runner，继续时越过当前断点一次后执行，不重复已完成副作用。`data/activity-manifest.json` 的 Activity 均指向 `.CL2.txt`；旧 JSON 仅保留为迁移审计输入。
 
 CL2 也覆盖窗口事件、物品活动和自定义蓝图节点中的内嵌流程图：这些 JSON 内容使用 `{ "cl2": "..." }` 保存，`DataLoader` 在运行时解码为图，开发数据编辑器保存时重新编码为 CL2。
 

@@ -6,6 +6,7 @@ import { parseCl2 } from "../core/Cl2Parser.js";
 import { registerCustomActivityNode } from "../core/ActivityNodeRegistry.js";
 import { ActivityDefinitionStore } from "../core/ActivityDefinitionStore.js";
 import { createActivityRunner } from "../core/ActivityRunner.js";
+import EventBus from "../core/EventBus.js";
 
 const read = (file) => fs.readFileSync(file, "utf8");
 const customNodes = decodeCl2Blueprints(JSON.parse(read("data/blueprint-nodes.framework.json")), "blueprint-nodes");
@@ -18,6 +19,8 @@ const definitions = await store.loadManifest(manifest.activityIds, "activities/"
 assert.equal(definitions.length, manifest.activityIds.length, "every manifest Activity must load through CL2");
 assert.ok(definitions.every((definition) => definition.format === "CL2"));
 assert.ok(definitions.every((definition) => definition.sourcePath.endsWith(".CL2.txt")));
+assert.ok(definitions.every((definition) => definition.compiled?.mode === "javascript"));
+assert.ok(definitions.every((definition) => definition.compiled.blueprint === definition.blueprint));
 
 let embeddedCount = 0;
 let multilineCount = 0;
@@ -58,4 +61,55 @@ runner.start();
 assert.equal(values.get("probe"), 7);
 assert.equal(instance.status, "resolved");
 assert.equal(instance.resolutionReason, "completed");
+
+const waitingGraph = parseCl2(
+  "start: flowStart() -> set; set: setVariable(\"hits\", 1) -> wait; wait: blockUntil(\"ready\", true) -> end; end: activityEnd();",
+  { validate: false },
+).graph;
+const waitingValues = new Map();
+const waitBus = new EventBus();
+const waitingInstance = { instanceId: "compiled-wait", status: "unresolved", executedNodeIds: [], localVariables: {} };
+const waitingRunner = createActivityRunner({
+  definition: { blueprint: waitingGraph },
+  instance: waitingInstance,
+  variableStore: {
+    get: (key) => waitingValues.get(key),
+    set: (key, value) => { waitingValues.set(key, value); waitBus.emit("variable:changed", { key, value }); },
+    delta: () => {},
+  },
+  eventBus: waitBus,
+});
+waitingRunner.start();
+assert.equal(waitingInstance.waitingNodeId, "wait", "compiled flow must suspend at the same CL2 node");
+assert.equal(waitingValues.get("hits"), 1);
+const waitDebugState = waitingRunner.getDebugState();
+assert.equal(waitDebugState.currentNodeId, "wait");
+assert.deepEqual(waitDebugState.compiled.nodeIds, ["start", "set", "wait", "end"]);
+assert.ok(waitDebugState.compiled.sourceMap.wait.sourceLine > 0);
+assert.ok(waitDebugState.compiled.source.includes('case "wait"'));
+waitingValues.set("ready", true);
+waitBus.emit("variable:changed", { key: "ready", value: true });
+assert.equal(waitingInstance.status, "resolved", "compiled flow must resume after its wait condition changes");
+assert.equal(waitingValues.get("hits"), 1, "resuming must not repeat an already completed side effect");
+
+const restoreGraph = parseCl2(
+  "start: flowStart() -> set; set: setVariable(\"restored\", 9) -> end; end: activityEnd();",
+  { validate: false },
+).graph;
+const restoredValues = new Map([["restored", 3]]);
+const restoredInstance = {
+  instanceId: "compiled-restore",
+  status: "unresolved",
+  currentNodeId: "set",
+  executedNodeIds: ["set"],
+  localVariables: {},
+};
+createActivityRunner({
+  definition: { blueprint: restoreGraph },
+  instance: restoredInstance,
+  variableStore: { get: (key) => restoredValues.get(key), set: (key, value) => restoredValues.set(key, value), delta: () => {} },
+  eventBus: new EventBus(),
+}).start();
+assert.equal(restoredValues.get("restored"), 3, "restoring at an executed one-shot node must preserve its prior side-effect result");
+assert.equal(restoredInstance.status, "resolved");
 console.log(`cl2-runtime-probe: ${definitions.length} activities, ${embeddedCount} embedded blueprints, ok`);
