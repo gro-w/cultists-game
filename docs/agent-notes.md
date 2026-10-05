@@ -32,6 +32,8 @@ CL2（Cultists Blueprint & Script Language 2）是当前 Activity 的生产脚�
 
 `Cl2Compiler` 生成 source map 行号时按代码块增量累计换行数，避免对每个节点反复切片、扫描不断增长的源码前缀。`probes/cl2-source-map-performance-probe.mjs` 覆盖源码行映射正确性，并测量大型合成 Activity 的编译开销。
 
+队列投影与数据库 join 在每次集合读取中只查询一次数据库，并用当前读取范围内的 Map 匹配队列项；这样保持原有首次匹配、顺序和字段覆盖语义，同时避免每个队列项重复克隆整库记录。索引不跨读取缓存，确保数据库修改会立刻反映在后续投影中。`probes/runtime-collection-join-performance-probe.mjs` 用 canonical HIS 患者数据覆盖查询次数、队列过滤/排序、重复 join key 与读取间更新。
+
 CL2 也覆盖窗口事件、物品活动和自定义蓝图节点中的内嵌流程图：这些 JSON 内容使用 `{ "cl2": "..." }` 保存，`DataLoader` 在运行时解码为图，开发数据编辑器保存时重新编码为 CL2。
 
 内嵌 CL2 的对象/数组值会递归解析 reusable 和 node 引用；自定义流程节点没有名为 `flowOut` 的输出时，隐式 `default` 连接到其首个声明出口。`framework:consumeTime` 的宏图直接调用 core `consumeTime` 节点，不依赖未注册的领域 API。显示节点保留 `text(displayTo, speaker, text, ...)` 的 canonical 参数顺序；动态窗口组件复制时合并模板事件，不能覆盖原有交互事件。
@@ -109,6 +111,7 @@ node probes/activity-queue-index-probe.mjs
 node probes/activity-queue-checkpoint-performance-probe.mjs
 node probes/activity-execution-id-index-probe.mjs
 node probes/public-variable-probe.mjs
+node probes/runtime-collection-join-performance-probe.mjs
 
 # JSON 全量校验
 python3 -c 'import json, pathlib; [json.load(open(p, encoding="utf-8")) for p in pathlib.Path(".").rglob("*.json") if ".git" not in p.parts and "publish" not in p.parts]'

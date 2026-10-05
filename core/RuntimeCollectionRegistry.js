@@ -56,9 +56,14 @@ export class RuntimeCollectionRegistry {
       if (!definition.databaseId) return projected;
       const joinField = definition.joinField || "dialogueActivityId";
       const suffix = definition.joinActivitySuffix || "";
+      const recordsByJoinKey = new Map();
+      for (const record of this.dataStore?.findRecords(definition.databaseId, {}) || []) {
+        const joinKey = String(record?.[joinField]);
+        if (!recordsByJoinKey.has(joinKey)) recordsByJoinKey.set(joinKey, record);
+      }
       return projected.flatMap((entry) => {
         const activityKey = `${entry.activityId || ""}${suffix}`;
-        const record = this.dataStore?.findRecords(definition.databaseId, {}).find((item) => String(item?.[joinField]) === activityKey);
+        const record = recordsByJoinKey.get(activityKey);
         return record ? [{ ...record, ...entry, id: record.id, queueInstanceId: entry.queueInstanceId }] : [];
       });
     }

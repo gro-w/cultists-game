@@ -55,6 +55,7 @@
 - 运行时集合定义可声明 `stateAliases`，由通用恢复流程把旧稳定 ID 归一到 canonical ID；core 不得写入具体游戏 ID，冲突时 canonical 记录优先。
 - 运行时集合可通过声明式 `derivedFields`、数据库 lookup、`prepend` 和 `stateCollectionId` 生成筛选字段、占位选项并复用 canonical 收集状态；窗口筛选应使用稳定 ID 和通用集合过滤，不在 renderer 或业务 JavaScript 中硬编码来源/类别判断。
 - 运行时集合还可通过通用 `activityQueueId` 投影 Activity 队列；core 只负责队列记录和可选 payload 投影，具体联系人/业务字段必须由 framework/game 数据声明，队列变化通过 `runtime:collection-changed` 驱动窗口刷新。
+- Activity 队列与数据库连接的运行时集合每次投影只查询数据库一次，并构建仅限本次读取的 join 索引；必须保留队列顺序、重复 join key 的首个记录匹配和既有字段合并语义，不能逐条重扫数据库或跨读取缓存实体。
 - Activity 的对话 transcript 可随实例保存，并通过通用回放能力向声明的 display receiver 重放；回放只能发送已保存的显示事件，不得重新执行蓝图或产生时间、资源和剧情副作用。
 - Activity 每个节点执行后都必须同步更新队列中的实例检查点；纯同步步骤不得逐节点广播 `activity:changed`，以免每一步触发所有数据窗口重建 DOM。窗口对变量、时钟和运行时集合失效事件必须按浏览器帧合并根节点重绘，并忽略已销毁窗口的排队刷新；等待、断点、终止及显式生命周期操作仍通知订阅者。
 - 蓝图节点只能使用项目定义的合法端口组合；新增节点必须同时通过 schema 校验、运行时探针和相关编辑器验证。
