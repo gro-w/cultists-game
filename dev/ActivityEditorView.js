@@ -6,6 +6,7 @@ import { createActivityEditorModel } from "./ActivityEditorModel.js";
 import { downloadTextFile, writeDataFile } from "./devApi.js";
 import { serializeCl2 } from "../core/Cl2Serializer.js";
 import { parseCl2 } from "../core/Cl2Parser.js";
+import { compileCl2Activity } from "../core/Cl2Compiler.js";
 
 // Layout constants mirror the old engine's blueprint editor
 // (js/desktop/DevDialogueEditorTab.js) so the two look and feel the same.
@@ -61,6 +62,7 @@ export class ActivityEditorView {
         <button type="button" data-action="download" title="${t("legacy.3f10b573ee1b")}JSON">${t("legacy.2b9d013177da")}</button>
         <button type="button" data-action="write-disk" title="${t("legacy.81ee3266b03d")}">${t("legacy.81ee3266b03d")}</button>
         <button type="button" data-action="toggle-source" title="${t("dev.blueprint.toggleCl2", "切换 CL2 脚本编辑器")}">${t("dev.blueprint.toggleCl2", "CL2 脚本编辑器")}</button>
+        ${this.valueOnly ? "" : `<button type="button" data-action="view-javascript" title="${t("dev.blueprint.viewCompiledJavaScript", "查看 JIT JavaScript")}">${t("dev.blueprint.viewCompiledJavaScript", "查看 JIT JavaScript")}</button>`}
         <span class="ng-editor-zoom-tools">
           <button type="button" data-action="zoom-out">－</button>
           <span class="ng-editor-zoom-label">100%</span>
@@ -78,6 +80,14 @@ export class ActivityEditorView {
         </div>
         <div class="ng-editor-inspector"></div>
         <textarea class="ng-editor-source" spellcheck="false" aria-label="${t("dev.blueprint.cl2Source", "CL2 脚本")}"></textarea>
+        <section class="ng-editor-generated-source" aria-label="${t("dev.blueprint.generatedJavaScript", "JIT 编译出的 JavaScript（只读）")}" hidden>
+          <div class="ng-editor-generated-toolbar">
+            <span>${t("dev.blueprint.generatedJavaScript", "JIT 编译出的 JavaScript（只读）")}</span>
+            <button type="button" data-action="close-javascript">${t("dev.blueprint.closeCompiledJavaScript", "关闭")}</button>
+          </div>
+          <textarea class="ng-editor-generated-code" readonly spellcheck="false" aria-label="${t("dev.blueprint.generatedJavaScript", "JIT 编译出的 JavaScript（只读）")}"></textarea>
+          <div class="ng-editor-generated-error" role="alert" hidden></div>
+        </section>
       </div>
     `;
     this.el = el;
@@ -90,6 +100,9 @@ export class ActivityEditorView {
     this.connectionsEl = el.querySelector(".ng-editor-connections");
     this.inspectorEl = el.querySelector(".ng-editor-inspector");
     this.sourceEl = el.querySelector(".ng-editor-source");
+    this.generatedSourcePanelEl = el.querySelector(".ng-editor-generated-source");
+    this.generatedSourceEl = el.querySelector(".ng-editor-generated-code");
+    this.generatedSourceErrorEl = el.querySelector(".ng-editor-generated-error");
 
     this._ensureArrowMarker();
     this._buildPalette();
@@ -158,6 +171,8 @@ export class ActivityEditorView {
     });
     this.el.querySelector('[data-action="write-disk"]').addEventListener("click", () => this._writeToDisk());
     this.el.querySelector('[data-action="toggle-source"]').addEventListener("click", () => this._toggleSourceMode());
+    this.el.querySelector('[data-action="view-javascript"]')?.addEventListener("click", () => this._showCompiledJavaScript());
+    this.el.querySelector('[data-action="close-javascript"]').addEventListener("click", () => this._closeCompiledJavaScript());
     this.el.querySelector('[data-action="zoom-in"]').addEventListener("click", () => this._setZoom(this.zoom + ZOOM_STEP));
     this.el.querySelector('[data-action="zoom-out"]').addEventListener("click", () => this._setZoom(this.zoom - ZOOM_STEP));
   }
@@ -168,6 +183,7 @@ export class ActivityEditorView {
   }
 
   _toggleSourceMode() {
+    this._closeCompiledJavaScript();
     const toggle = this.el.querySelector('[data-action="toggle-source"]');
     if (this.editorMode === "graph") {
       this.sourceEl.value = serializeCl2(this.model.exportBlueprint(), { activityId: this.model.activityId });
@@ -194,6 +210,55 @@ export class ActivityEditorView {
     this.el.classList.remove("ng-editor-source-mode");
     toggle.textContent = t("dev.blueprint.toggleCl2", "CL2 脚本编辑器");
     this.render();
+  }
+
+  _showCompiledJavaScript() {
+    this.generatedSourcePanelEl.hidden = false;
+    this.el.classList.add("ng-editor-javascript-mode");
+    this.generatedSourceEl.value = "";
+    this.generatedSourceErrorEl.hidden = true;
+    this.generatedSourceErrorEl.textContent = "";
+
+    try {
+      let blueprint;
+      if (this.editorMode === "source") {
+        const parsed = parseCl2(this.sourceEl.value, {
+          sourcePath: this.dataFileName || "<editor>",
+          validate: true,
+        });
+        if (!parsed.ok) throw new Error(parsed.diagnostics.map((item) => item.message || String(item)).join("；"));
+        const candidateModel = createActivityEditorModel({
+          activityId: this.model.activityId,
+          blueprint: parsed.graph,
+          displayName: this.model.displayName,
+        });
+        const validation = candidateModel.validateForSave();
+        if (!validation.ok) throw new Error(validation.errors.join("；"));
+        blueprint = parsed.graph;
+      } else {
+        const validation = this.model.validateForSave();
+        if (!validation.ok) throw new Error(validation.errors.join("；"));
+        blueprint = this.model.exportBlueprint();
+      }
+
+      // Compile the current draft on every click; never show a cached
+      // ActivityDefinitionStore compilation in this editor view.
+      const compiled = compileCl2Activity(blueprint);
+      this.generatedSourceEl.value = compiled.source;
+      this._setStatus(t("dev.blueprint.javascriptRecompiled", "JIT JavaScript 已重新编译"));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const failure = `${t("dev.blueprint.javascriptCompileFailed", "JIT 编译失败：")}${message}`;
+      this.generatedSourceErrorEl.textContent = failure;
+      this.generatedSourceErrorEl.hidden = false;
+      this._setStatus(failure, true);
+    }
+  }
+
+  _closeCompiledJavaScript() {
+    if (!this.generatedSourcePanelEl || this.generatedSourcePanelEl.hidden) return;
+    this.generatedSourcePanelEl.hidden = true;
+    this.el.classList.remove("ng-editor-javascript-mode");
   }
 
   _applyZoom() {

@@ -442,5 +442,10 @@ export default {
     "dev.blueprint.toggleCl2": "CL2 脚本编辑器",
     "dev.blueprint.toggleGraph": "蓝图编辑器",
     "dev.blueprint.cl2Source": "CL2 脚本",
+    "dev.blueprint.viewCompiledJavaScript": "查看 JIT JavaScript",
+    "dev.blueprint.generatedJavaScript": "JIT 编译出的 JavaScript（只读）",
+    "dev.blueprint.closeCompiledJavaScript": "关闭",
+    "dev.blueprint.javascriptRecompiled": "JIT JavaScript 已重新编译",
+    "dev.blueprint.javascriptCompileFailed": "JIT 编译失败：",
   }
 };

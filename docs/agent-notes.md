@@ -142,6 +142,7 @@ node tools/verify-publish.js
 - 对话联系人列表的显示 ID 与回放实例 ID 分离：窗口列表通过 `itemEventValueField: "queueInstanceId"` 回放 Activity 队列实例；普通对话保留 transcript，`ending-screen` 只保留当前一句并由继续按钮推进下一句。结局立绘使用统一容器尺寸和资源路径解析，玩家资源的透明留白需通过显示缩放归一化。
 - `dorm-bottom` 室友对话显示会路由到 `ending-screen`，对话窗口关闭；Activity 完成后由结局窗口自己的“继续”按钮关闭会话。`ending-screen` 声明 `dorm-bottom` 接收别名以接收 Activity 完成和 reset 事件。
 - Activity 编辑器工具栏提供“CL2 脚本编辑器/蓝图编辑器”切换；图形模式导出当前草稿为 CL2，源码模式切回图形模式前执行解析和完整验证，失败时保留源码和原图形草稿。
+- Activity 编辑器的“查看 JIT JavaScript”入口紧邻 CL2 切换按钮；每次点击都从当前图形草稿或 CL2 文本重新调用 `compileCl2Activity`，只读显示本次生成源码，编译失败会清空旧输出并显示错误。纯数值组件蓝图不提供此 Activity 编译入口。
 - 启动时 `gameTimeMinutes` 公共变量在注册 `GameClock` 同步源后立即同步；否则患者队列管理器在第 1 天 08:00 会读取默认零值并停在首个 `blockUntil`，HIS 的 `hisPatients` 集合为空。
 - 窗口组件数值蓝图会为绑定到组件属性的每个图输出生成无输出的 `valueReceiver` 终端；CL2 `inputvalue` 在源码/图形往返时保留接收节点及全部数值边，运行时由接收节点读取其输入值。`reusablevalue`、`inputvalue` 和流程声明均写入并读取 `@cl2.pos`；旧源码缺少坐标时，ActivityEditorModel 在加载时补齐，以免 SVG 连线路径因 `undefined` 坐标变为 `NaN`。旧式 `inputvalue receiver: arithmetic[...]` 会归一为纯值表达式加接收包装节点。
 - Activity 蓝图节点样式依类别区分：流程节点蓝色、流程起点蓝色并显示 Home 图标、纯值节点绿色、数值接收节点紫色。

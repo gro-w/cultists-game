@@ -442,5 +442,10 @@ export default {
     "dev.blueprint.toggleCl2": "CL2 script editor",
     "dev.blueprint.toggleGraph": "Blueprint editor",
     "dev.blueprint.cl2Source": "CL2 source",
+    "dev.blueprint.viewCompiledJavaScript": "View JIT JavaScript",
+    "dev.blueprint.generatedJavaScript": "JIT-compiled JavaScript (read-only)",
+    "dev.blueprint.closeCompiledJavaScript": "Close",
+    "dev.blueprint.javascriptRecompiled": "JIT JavaScript recompiled",
+    "dev.blueprint.javascriptCompileFailed": "JIT compilation failed: ",
   }
 };
