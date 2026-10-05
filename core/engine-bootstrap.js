@@ -310,9 +310,10 @@ export async function bootstrap(rootEl) {
   content.bindRuntime?.({ runActivity });
   function executeActivity({ queue, definition, instance }) {
     /* DEV-TOOLS:START */
+    const executionStartedAt = Array.isArray(globalThis.__cultistsPerformanceSamples) ? globalThis.performance.now() : null;
     console.log("[NG dialogue] executeActivity", { activityId: definition?.id, queueId: queue?.queueId, instanceId: instance?.instanceId, currentNodeId: instance?.currentNodeId });
     /* DEV-TOOLS:END */
-    return execution.run({
+    const runner = execution.run({
       queue, definition, instance, variableStore,
       timeGateway: (minutes) => timeService.consume(minutes, { source: "activity" }),
       windowGateway: (id, instance, node) => {
@@ -333,6 +334,17 @@ export async function bootstrap(rootEl) {
       }, dbGateway: dataStore,
       pvGateway: publicVariables, eventStateGateway: eventState, apiGateway,
     });
+    /* DEV-TOOLS:START */
+    if (Number.isFinite(executionStartedAt) && Array.isArray(globalThis.__cultistsPerformanceSamples)) {
+      globalThis.__cultistsPerformanceSamples.push({
+        name: "activity-execution-start",
+        activityId: definition?.id,
+        queueId: queue?.queueId,
+        durationMs: globalThis.performance.now() - executionStartedAt,
+      });
+    }
+    /* DEV-TOOLS:END */
+    return runner;
   }
   saveManager.resumePendingActivities = () => {
     for (const queue of queues.list()) {
@@ -345,7 +357,20 @@ export async function bootstrap(rootEl) {
     }
   };
   function runInlineBlueprint(queue, activityId, blueprint) {
+    /* DEV-TOOLS:START */
+    const validationStartedAt = Array.isArray(globalThis.__cultistsPerformanceSamples) ? globalThis.performance.now() : null;
+    /* DEV-TOOLS:END */
     const validation = validateBlueprint(blueprint);
+    /* DEV-TOOLS:START */
+    if (Number.isFinite(validationStartedAt) && Array.isArray(globalThis.__cultistsPerformanceSamples)) {
+      globalThis.__cultistsPerformanceSamples.push({
+        name: "inline-blueprint-validation",
+        activityId,
+        durationMs: globalThis.performance.now() - validationStartedAt,
+        nodeCount: Object.keys(blueprint.nodes || {}).length,
+      });
+    }
+    /* DEV-TOOLS:END */
     if (!validation.ok) throw new Error(`Invalid blueprint ${activityId}: ${validation.errors.join("；")}`);
     const instance = queue.append({ activityId });
     eventBus.emit(ACTIVITY_EVENTS.appended, { queueId: queue.queueId, instance: { ...instance } });

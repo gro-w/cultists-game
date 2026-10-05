@@ -1,9 +1,9 @@
 import { t } from "./i18n/index.js";
 import { compileCl2Activity } from "./Cl2Compiler.js";
 /**
- * ActivityRunner - executes a JIT-compiled CL2 flow graph for one Activity
- * instance's Blueprint (plan §13 Phase 2). Kept generic: the only node
- * types understood here are the ones in ActivityNodeRegistry.js.
+ * ActivityRunner - manages lifecycle and host gateways for the compiler-
+ * generated JavaScript executor of one Activity instance's CL2 Blueprint.
+ * Node operations and pure value expressions are emitted by Cl2Compiler.
  *
  * There is no dedicated "loop" node type: a loop is just an ordinary flow
  * cycle - one of a `branch` node's outputs is wired back to a node earlier
@@ -27,16 +27,10 @@ const ONE_SHOT_NODE_TYPES = new Set([
 ]);
 const MAX_STEPS = 1000;
 
-function nextFlow(blueprint, node, port = "flowOut") {
-  return node.next?.[port]?.nodeId ?? null;
-}
-
 /**
- * Evaluate a pure value node's output on demand (plan §6.2 value-port
- * wiring). Value nodes (e.g. `arithmetic`, `getVariable`) are never
- * flow-stepped by `run()`; they are pulled lazily whenever a flow node's
- * value input is wired to one of their outputs, recursing through chained
- * value nodes. `stack` guards against circular wiring.
+ * Evaluate a pure value node for non-Activity consumers such as availability
+ * checks. Activity execution compiles value graphs into JavaScript expressions
+ * and does not call this recursive resolver.
  */
 export function evaluateValueOutput(blueprint, nodeId, portName, variableStore, stack, pvGateway = null, dbGateway = null, runtimeGateway = null) {
   const key = `${nodeId}:${portName}`;
@@ -261,14 +255,33 @@ export function createActivityRunner({
   onComplete = () => {},
 } = {}) {
   const blueprint = definition.blueprint;
+  /* DEV-TOOLS:START */
+  const performanceSamples = globalThis.__cultistsPerformanceSamples;
+  const compileStartedAt = Array.isArray(performanceSamples) ? globalThis.performance.now() : null;
+  /* DEV-TOOLS:END */
   const compiledActivity = definition.compiled?.mode === "javascript" && definition.compiled.blueprint === blueprint
     ? definition.compiled
     : compileCl2Activity(blueprint, { maxSteps: MAX_STEPS });
+  /* DEV-TOOLS:START */
+  if (Array.isArray(performanceSamples) && Number.isFinite(compileStartedAt)) {
+    performanceSamples.push({
+      name: "activity-jit-compile",
+      activityId: definition.id,
+      durationMs: globalThis.performance.now() - compileStartedAt,
+      flowNodeCount: compiledActivity.flowNodeIds.length,
+      reusedCompilation: definition.compiled?.mode === "javascript" && definition.compiled.blueprint === blueprint,
+    });
+  }
+  const nodeStartedAtById = Array.isArray(performanceSamples) ? new Map() : null;
+  /* DEV-TOOLS:END */
   let cancelled = false;
   let paused = instance.status === "paused";
   let waitUnsubscribe = null;
+  let waitGeneration = 0;
   let lastDialogueDisplayTo = null;
+  const executionState = { lastDialogueDisplayTo: null };
   instance.executedNodeIds = Array.isArray(instance.executedNodeIds) ? instance.executedNodeIds : [];
+  const executedNodeIdSet = new Set(instance.executedNodeIds);
   instance.executionTrace = Array.isArray(instance.executionTrace) ? instance.executionTrace : [];
   instance.executionStep = Math.max(
     Number.isInteger(instance.executionStep) && instance.executionStep >= 0 ? instance.executionStep : 0,
@@ -277,6 +290,7 @@ export function createActivityRunner({
   instance.breakpointNodeIds = Array.isArray(instance.breakpointNodeIds)
     ? [...new Set(instance.breakpointNodeIds.map(String))].filter((nodeId) => compiledActivity.flowNodeIds.includes(nodeId))
     : [];
+  let breakpointNodeIdSet = new Set(instance.breakpointNodeIds);
   instance.pausedAtBreakpointId = typeof instance.pausedAtBreakpointId === "string" ? instance.pausedAtBreakpointId : null;
   let lastTraceEntry = instance.executionTrace.at(-1) || null;
   const globalVariableStore = variableStore;
@@ -300,7 +314,9 @@ export function createActivityRunner({
   };
 
   function markExecuted(node) {
-    if (!instance.executedNodeIds.includes(node.id)) instance.executedNodeIds.push(node.id);
+    if (executedNodeIdSet.has(node.id)) return;
+    executedNodeIdSet.add(node.id);
+    instance.executedNodeIds.push(node.id);
   }
 
   function recordExecutionStep(nodeId, status) {
@@ -319,10 +335,10 @@ export function createActivityRunner({
     if (lastTraceEntry && ["running", "waiting", "breakpoint"].includes(lastTraceEntry.status)) lastTraceEntry.status = reason;
     instance.pausedAtBreakpointId = null;
     if (instance.currentStep) instance.currentStep = { ...instance.currentStep, status: reason };
-    if (lastDialogueDisplayTo) {
+    if (executionState.lastDialogueDisplayTo) {
       eventGateway("display:complete", {
         instanceId: instance.instanceId,
-        displayTo: lastDialogueDisplayTo,
+        displayTo: executionState.lastDialogueDisplayTo,
         reason,
       }, instance);
     }
@@ -330,422 +346,141 @@ export function createActivityRunner({
     onComplete(instance, reason);
   }
 
-  function execute(node) {
-    switch (node.type) {
-      case "flowStart":
-        return { next: nextFlow(blueprint, node) };
-      case "activityEnd":
-        finish("completed");
-        return { stop: true };
-      case "macroReturn":
-        instance.returnPort = String(resolveInput(blueprint, node, "port", variableStore, "flowOut", undefined, pvGateway, dbGateway, runtimeGateway));
-        finish("returned");
-        return { stop: true };
-      case "setVariable": {
-        const key = resolveInput(blueprint, node, "key", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        if (Object.prototype.hasOwnProperty.call(node.inputs || {}, "delta")) {
-          variableStore.delta(key, resolveInput(blueprint, node, "delta", variableStore, 0, undefined, pvGateway, dbGateway, runtimeGateway));
-        } else {
-          variableStore.set(key, resolveInput(blueprint, node, "value", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway));
-        }
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "setGlobal": {
-        if (!pvGateway) throw new Error(`Node ${node.type} requires a pvGateway`);
-        const id = resolveInput(blueprint, node, "variableId", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        if (Object.prototype.hasOwnProperty.call(node.inputs || {}, "delta")) pvGateway.increment(id, resolveInput(blueprint, node, "delta", variableStore, 0, undefined, pvGateway, dbGateway, runtimeGateway));
-        else pvGateway.set(id, resolveInput(blueprint, node, "value", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway));
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "appendToArrayVariable": {
-        const key = resolveInput(blueprint, node, "key", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        const current = variableStore.get(key);
-        const values = Array.isArray(current) ? [...current] : [];
-        values.push(resolveInput(blueprint, node, "value", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway));
-        variableStore.set(key, values);
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "setLocalVariable": {
-        const key = resolveInput(blueprint, node, "key", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        const scopedKey = `__local:${key}`;
-        if (Object.prototype.hasOwnProperty.call(node.inputs || {}, "delta")) {
-          variableStore.delta(scopedKey, resolveInput(blueprint, node, "delta", variableStore, 0, undefined, pvGateway, dbGateway, runtimeGateway));
-        } else {
-          variableStore.set(scopedKey, resolveInput(blueprint, node, "value", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway));
-        }
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "setLanguage": {
-        if (!runtimeGateway?.setLanguage) throw new Error(t("error.70e51cb62f01"));
-        runtimeGateway.setLanguage(resolveInput(blueprint, node, "language", variableStore, "", undefined, pvGateway, dbGateway, runtimeGateway));
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "branch": {
-        const condition = Boolean(resolveInput(blueprint, node, "condition", variableStore, false, undefined, pvGateway, dbGateway, runtimeGateway));
-        return { next: nextFlow(blueprint, node, condition ? "true" : "false") };
-      }
-      case "blockUntil": {
-        if (node.inputs && Object.prototype.hasOwnProperty.call(node.inputs, "condition")) {
-          const condition = Boolean(resolveInput(blueprint, node, "condition", variableStore, false, undefined, pvGateway, dbGateway, runtimeGateway));
-          if (condition) return { next: nextFlow(blueprint, node) };
-          return { wait: true };
-        }
-        const key = resolveInput(blueprint, node, "key", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        const expected = resolveInput(blueprint, node, "equals", variableStore, true, undefined, pvGateway, dbGateway, runtimeGateway);
-        if (variableStore.get(key) === expected) return { next: nextFlow(blueprint, node) };
-        return { wait: true };
-      }
-
-      case "openWindow": {
-        const skip = Boolean(resolveInput(blueprint, node, "skip", variableStore, false, undefined, pvGateway, dbGateway, runtimeGateway));
-        const windowId = resolveInput(blueprint, node, "windowId", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        if (!skip) windowGateway(windowId, instance, node);
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "closeWindow": {
-        const windowId = resolveInput(blueprint, node, "windowId", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        windowGateway(windowId, instance, node);
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "addWindowComponent": {
-        if (!apiGateway?.call) throw new Error(t("error.cbac236a53f6"));
-        const publicVariableId = resolveInput(blueprint, node, "publicVariableId", variableStore, null, undefined, pvGateway, dbGateway, runtimeGateway);
-        const rawProperties = node.inputs?.properties;
-        const componentProperties = rawProperties && typeof rawProperties === "object" && !Array.isArray(rawProperties) && !Object.prototype.hasOwnProperty.call(rawProperties, "nodeId") && !Object.prototype.hasOwnProperty.call(rawProperties, "variable")
-          ? structuredClone(rawProperties)
-          : resolveInput(blueprint, node, "properties", variableStore, {}, undefined, pvGateway, dbGateway, runtimeGateway);
-        const result = apiGateway.call("window.addComponent", {
-          windowId: resolveInput(blueprint, node, "windowId", variableStore, null, undefined, pvGateway, dbGateway, runtimeGateway),
-          parentId: resolveInput(blueprint, node, "parentId", variableStore, "root", undefined, pvGateway, dbGateway, runtimeGateway),
-          componentId: resolveInput(blueprint, node, "componentId", variableStore, null, undefined, pvGateway, dbGateway, runtimeGateway),
-          componentType: resolveInput(blueprint, node, "componentType", variableStore, "container", undefined, pvGateway, dbGateway, runtimeGateway),
-          publicVariableId,
-          maxCount: resolveInput(blueprint, node, "maxCount", variableStore, null, undefined, pvGateway, dbGateway, runtimeGateway),
-          properties: {
-            ...componentProperties,
-            ...Object.fromEntries(["x", "y", "width", "height", "text", "enabled"].map((key) => [key, resolveInput(blueprint, node, key, variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway)]).filter(([, value]) => value !== undefined)),
-          },
-          events: Object.fromEntries(["onCreate", "onClick", "onChange", "onFocus", "onBlur", "onDestroy"].map((eventName) => {
-            const target = node.next?.[eventName]?.nodeId;
-            return [eventName, target ? { ...blueprint, startNodeId: target } : node.events?.[eventName]];
-          }).filter(([, event]) => event)),
-        });
-        if (result?.componentId && publicVariableId != null && pvGateway) pvGateway.set(publicVariableId, result.componentId);
-        variableStore.set(`__nodeResult:${node.id}:componentId`, result?.componentId ?? null);
-        const resultVariable = resolveInput(blueprint, node, "resultVariable", variableStore, null, undefined, pvGateway, dbGateway, runtimeGateway);
-        if (resultVariable) variableStore.set(resultVariable, result?.componentId ?? null);
-        return { next: nextFlow(blueprint, node, "onCreate") || nextFlow(blueprint, node) };
-      }
-      case "removeWindowComponent": {
-        if (!apiGateway?.call) throw new Error(t("error.feb2a3be2247"));
-        apiGateway.call("window.removeComponent", {
-          windowId: resolveInput(blueprint, node, "windowId", variableStore, null, undefined, pvGateway, dbGateway, runtimeGateway),
-          componentId: resolveInput(blueprint, node, "componentId", variableStore, null, undefined, pvGateway, dbGateway, runtimeGateway),
-        });
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "getWindowLayout": {
-        if (!apiGateway?.call) throw new Error(t("error.a6702f0f6b54"));
-        const result = apiGateway.call("window.getLayout", { windowId: resolveInput(blueprint, node, "windowId", variableStore, null, undefined, pvGateway, dbGateway, runtimeGateway) });
-        const resultVariable = resolveInput(blueprint, node, "resultVariable", variableStore, null, undefined, pvGateway, dbGateway, runtimeGateway);
-        if (resultVariable) variableStore.set(resultVariable, result);
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "runActivity":
-      case "insertActivity": {
-        const activityId = resolveInput(blueprint, node, "activityId", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        const queueId = resolveInput(blueprint, node, "queue", variableStore, resolveInput(blueprint, node, "queueId", variableStore, "main", undefined, pvGateway, dbGateway, runtimeGateway), undefined, pvGateway, dbGateway, runtimeGateway);
-        const payload = resolveInput(blueprint, node, "payload", variableStore, null, undefined, pvGateway, dbGateway, runtimeGateway);
-        activityGateway(activityId, queueId, instance, node, payload);
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "consumeTime": {
-        timeGateway(Number(resolveInput(blueprint, node, "minutes", variableStore, 0, undefined, pvGateway, dbGateway, runtimeGateway)) || 0);
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "insertSchedule": {
-        eventGateway("schedule:insert", {
-          scheduleId: resolveInput(blueprint, node, "scheduleId", variableStore, "", undefined, pvGateway, dbGateway, runtimeGateway),
-          queueId: resolveInput(blueprint, node, "queue", variableStore, "main", undefined, pvGateway, dbGateway, runtimeGateway),
-          addTime: resolveInput(blueprint, node, "addTime", variableStore, 0, undefined, pvGateway, dbGateway, runtimeGateway),
-        }, instance, node);
-        return { next: nextFlow(blueprint, node) };
-      }
-
-
-      case "segmentBranch": {
-        const value = Number(resolveInput(blueprint, node, "value", variableStore, 0, undefined, pvGateway, dbGateway, runtimeGateway));
-        const count = Math.max(1, Math.min(32, Math.floor(Number(resolveInput(blueprint, node, "branchCount", variableStore, 1, undefined, pvGateway, dbGateway, runtimeGateway)))));
-        const boundaries = Array.from({ length: count + 1 }, (_, index) => Number(resolveInput(blueprint, node, `boundary${index}`, variableStore, 0, undefined, pvGateway, dbGateway, runtimeGateway)));
-        const index = boundaries.findIndex((upper, boundaryIndex) => value <= upper && value > boundaries[boundaryIndex + 1]);
-        return { next: nextFlow(blueprint, node, index < 0 ? "default" : `segment${index}`) };
-      }
-      case "emitEvent": {
-        const eventName = resolveInput(blueprint, node, "eventName", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        const payload = resolveInput(blueprint, node, "payload", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        eventGateway(eventName, payload, instance, node);
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "callApi": {
-        if (!apiGateway?.call) throw new Error(t("error.a389d5090bf1"));
-        const apiId = resolveInput(blueprint, node, "apiId", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        const payload = resolveInput(blueprint, node, "payload", variableStore, null, undefined, pvGateway, dbGateway, runtimeGateway);
-        const result = apiGateway.call(apiId, payload, instance, node);
-        const resultVariable = resolveInput(blueprint, node, "resultVariable", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        if (resultVariable) variableStore.set(resultVariable, result);
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "playBgm": {
-        if (!apiGateway?.call) throw new Error("Node playBgm requires an apiGateway");
-        apiGateway.call("audio.playLoop", { trackId: resolveInput(blueprint, node, "bgmId", variableStore, null, undefined, pvGateway, dbGateway, runtimeGateway) });
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "stopBgm": {
-        if (!apiGateway?.call) throw new Error("Node stopBgm requires an apiGateway");
-        apiGateway.call("audio.stop");
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "setBgmVolume": {
-        if (!apiGateway?.call) throw new Error("Node setBgmVolume requires an apiGateway");
-        apiGateway.call("audio.volume", { volume: resolveInput(blueprint, node, "volume", variableStore, 100, undefined, pvGateway, dbGateway, runtimeGateway) });
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "pushBgmLayer": {
-        if (!apiGateway?.call) throw new Error("Node pushBgmLayer requires an apiGateway");
-        apiGateway.call("audio.layer", {
-          action: resolveInput(blueprint, node, "action", variableStore, "play", undefined, pvGateway, dbGateway, runtimeGateway),
-          trackId: resolveInput(blueprint, node, "bgmId", variableStore, null, undefined, pvGateway, dbGateway, runtimeGateway),
-        });
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "restoreBgmLayer": {
-        if (!apiGateway?.call) throw new Error("Node restoreBgmLayer requires an apiGateway");
-        apiGateway.call("audio.layer", { action: "restore" });
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "createRecord":
-      case "getRecord":
-      case "updateRecord":
-      case "deleteRecord":
-      case "findRecords":
-      case "countRecords": {
-        if (!dbGateway) throw new Error(`Node ${node.type} requires a dbGateway`);
-        const databaseId = resolveInput(blueprint, node, "databaseId", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        const resultVariable = resolveInput(blueprint, node, "resultVariable", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        let result;
-        if (node.type === "createRecord") {
-          result = dbGateway.createRecord(databaseId, resolveInput(blueprint, node, "data", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway));
-        } else if (node.type === "getRecord") {
-          result = dbGateway.getRecord(databaseId, resolveInput(blueprint, node, "key", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway));
-        } else if (node.type === "updateRecord") {
-          result = dbGateway.updateRecord(databaseId, resolveInput(blueprint, node, "key", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway), resolveInput(blueprint, node, "patch", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway));
-        } else if (node.type === "deleteRecord") {
-          result = dbGateway.deleteRecord(databaseId, resolveInput(blueprint, node, "key", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway));
-        } else if (node.type === "findRecords") {
-          result = dbGateway.findRecords(databaseId, resolveInput(blueprint, node, "query", variableStore, {}, undefined, pvGateway, dbGateway, runtimeGateway));
-        } else {
-          result = dbGateway.countRecords(databaseId, resolveInput(blueprint, node, "query", variableStore, {}, undefined, pvGateway, dbGateway, runtimeGateway));
-        }
-        if (resultVariable) variableStore.set(resultVariable, result);
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "applyPublicVariableEffect": {
-        if (!pvGateway) throw new Error(`Node ${node.type} requires a pvGateway`);
-        const id = resolveInput(blueprint, node, "id", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        const inputs = node.inputs || {};
-        if (Object.prototype.hasOwnProperty.call(inputs, "delta")) {
-          pvGateway.increment(id, resolveInput(blueprint, node, "delta", variableStore, 0, undefined, pvGateway, dbGateway, runtimeGateway));
-        } else if (Object.prototype.hasOwnProperty.call(inputs, "toggle")) {
-          pvGateway.toggle(id);
-        } else if (Object.prototype.hasOwnProperty.call(inputs, "setObjectRef")) {
-          pvGateway.setObjectRef(id, resolveInput(blueprint, node, "setObjectRef", variableStore, null, undefined, pvGateway, dbGateway, runtimeGateway));
-        } else {
-          const value = resolveInput(blueprint, node, "value", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-          // Legacy effect blueprints encoded a negative adjustment in the
-          // positional `value` port. Preserve that effect semantics while
-          // keeping explicit `value` assignments unchanged for non-negative
-          // values; new blueprints should use the typed `delta` port.
-          if (typeof value === "number" && value < 0) pvGateway.increment(id, value);
-          else pvGateway.set(id, value);
-        }
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "markEventState": {
-        if (!eventStateGateway && !onboardingGateway) throw new Error(`Node ${node.type} requires an eventStateGateway`);
-        (eventStateGateway || onboardingGateway).mark(resolveInput(blueprint, node, "id", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway));
-        return { next: nextFlow(blueprint, node) };
-      }
-
-      case "text": {
-        const displayTo = resolveInput(blueprint, node, "displayTo", variableStore, "default", undefined, pvGateway, dbGateway, runtimeGateway);
-        const authoredContinueKey = resolveInput(blueprint, node, "continueKey", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        // Roommate dialogue is presented in the galgame-style ending window.
-        // Legacy social CL2 lines often omitted continueKey because they were
-        // previously rendered by an auto-advancing dialogue panel. Give those
-        // lines a stable per-node wait key so the visible Continue button is
-        // the actual Activity synchronization point.
-        const continueKey = authoredContinueKey || (displayTo === "dorm-bottom" ? `dlg:${node.id}:continue` : null);
-        // A resumed text node is entered once more after its continue key is
-        // set. Do not emit the same line a second time; consume the key and
-        // advance directly to the next flow node (which may be a choice).
-        if (continueKey && variableStore.get(continueKey)) {
-          variableStore.set(continueKey, null);
-          return { next: nextFlow(blueprint, node) };
-        }
-        const payload = {
-          instanceId: instance.instanceId,
-          speaker: resolveInput(blueprint, node, "speaker", variableStore, "", undefined, pvGateway, dbGateway, runtimeGateway),
-          text: resolveInput(blueprint, node, "text", variableStore, "", undefined, pvGateway, dbGateway, runtimeGateway),
-          displayTo,
-          keywordIds: resolveInput(blueprint, node, "keywordIds", variableStore, [], undefined, pvGateway, dbGateway, runtimeGateway),
-          continueKey: continueKey || null,
-        };
-        lastDialogueDisplayTo = payload.displayTo || lastDialogueDisplayTo;
-        instance.transcript = Array.isArray(instance.transcript) ? instance.transcript : [];
-        instance.transcript.push({ type: "text", ...payload, continueKey: null });
-        /* DEV-TOOLS:START */
-        console.log("[NG dialogue] ActivityRunner text node", { activityId: definition.id, nodeId: node.id, payload });
-        /* DEV-TOOLS:END */
-        eventGateway("display:text", payload, instance, node);
-        if (continueKey && !variableStore.get(continueKey)) return { wait: true };
-        if (continueKey) variableStore.set(continueKey, null);
-        return { next: nextFlow(blueprint, node) };
-      }
-      case "choice": {
-        const selectionKey = resolveInput(blueprint, node, "selectionKey", variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-        const optionCount = Number(resolveInput(blueprint, node, "optionCount", variableStore, 0, undefined, pvGateway, dbGateway, runtimeGateway)) || 0;
-        const payload = {
-          instanceId: instance.instanceId,
-          options: resolveInput(blueprint, node, "options", variableStore, [], undefined, pvGateway, dbGateway, runtimeGateway),
-          selectionKey,
-          // Choice nodes in legacy social Activities do not declare their own
-          // receiver. Keep them on the receiver used by the preceding
-          // dialogue line; otherwise ending-screen never receives the choice
-          // event and its stale Continue button remains visible.
-          displayTo: resolveInput(blueprint, node, "displayTo", variableStore, lastDialogueDisplayTo || "default", undefined, pvGateway, dbGateway, runtimeGateway),
-        };
-        const selected = selectionKey ? variableStore.get(selectionKey) : undefined;
-        // A wake-up caused by the button click must consume the selection and
-        // continue the graph. Re-emitting the same choice first can make the
-        // receiver look stuck and leaves the old controls mounted.
-        if (selected !== undefined && selected !== null) {
-          const index = Number(selected);
-          if (!Number.isInteger(index) || index < 0 || index >= optionCount) {
-            throw new Error(`Node ${node.id} received an out-of-range choice selection: ${selected}`);
-          }
-          if (selectionKey) variableStore.set(selectionKey, null);
-          return { next: nextFlow(blueprint, node, `option${index}`) };
-        }
-        lastDialogueDisplayTo = payload.displayTo || lastDialogueDisplayTo;
-        instance.transcript = Array.isArray(instance.transcript) ? instance.transcript : [];
-        instance.transcript.push({ type: "choice", ...payload });
-        /* DEV-TOOLS:START */
-        console.log("[NG dialogue] ActivityRunner choice node", { activityId: definition.id, nodeId: node.id, payload });
-        /* DEV-TOOLS:END */
-        eventGateway("display:choice", payload, instance, node);
-        return { wait: true };
-      }
-      default: {
-        const customDefinition = getActivityNodeDefinition(node.type);
-        if (!customDefinition?.custom || !customDefinition.blueprint) throw new Error(`Unhandled node type: ${node.type}`);
-        const replaceParameters = (value) => {
-          if (Array.isArray(value)) return value.map(replaceParameters);
-          if (!value || typeof value !== "object") return value;
-          if (Object.keys(value).length === 1 && typeof value.parameter === "string") {
-            return resolveInput(blueprint, node, value.parameter, variableStore, undefined, undefined, pvGateway, dbGateway, runtimeGateway);
-          }
-          return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, replaceParameters(child)]));
-        };
-        const nestedBlueprint = structuredClone(customDefinition.blueprint);
-        for (const nestedNode of Object.values(nestedBlueprint.nodes || {})) {
-          nestedNode.inputs = replaceParameters(nestedNode.inputs || {});
-        }
-        const childInstance = {
-          instanceId: `${instance.instanceId}:custom:${node.id}`,
-          status: "pending",
-          currentNodeId: nestedBlueprint.startNodeId,
-          executedNodeIds: [],
-          waitingNodeId: null,
-        };
-        const childRunner = createActivityRunner({
-          definition: { id: node.type, blueprint: nestedBlueprint },
-          instance: childInstance,
-          variableStore,
-          eventBus,
-          timeGateway,
-          windowGateway,
-          activityGateway,
-          eventGateway,
-          dbGateway,
-          pvGateway,
-          runtimeGateway,
-          eventStateGateway,
-          apiGateway,
-          onCheckpoint: () => {},
-          onComplete: () => {},
-        });
-        childRunner.start();
-        if (childInstance.status !== "resolved") throw new Error(`Custom blueprint node ${node.type} entered a waiting state; reusable nodes must complete synchronously`);
-        return { next: nextFlow(blueprint, node, childInstance.returnPort) || nextFlow(blueprint, node) };
-      }
-    }
-  }
-
-  // A blockUntil node may depend on the generic per-run variableStore, on a
-  // typed public PublicVariableManager value, or (via a wired
-  // publicVariableCondition fed by a value comparing against the current
-  // game-clock time) on the GameClock advancing - so re-checks are woken by
-  // any of these three generic engine events, never a domain-specific one.
-  const WAIT_WAKE_EVENTS = ["variable:changed", "gameClock:changed"];
-
   function subscribeWait(node) {
     if (waitUnsubscribe) return;
-    const unsubscribers = WAIT_WAKE_EVENTS.map((eventName) => eventBus.on(eventName, () => {
-      if (cancelled || paused || instance.status === "resolved") return;
-      const unsubscribe = waitUnsubscribe;
-      if (!unsubscribe) return;
-      waitUnsubscribe = null;
-      unsubscribe();
-      run(node.id);
-    }));
-    waitUnsubscribe = () => unsubscribers.forEach((fn) => fn());
+    const generation = ++waitGeneration;
+    const dependencies = compiledActivity.waitDependencies?.[node.id] || { wildcard: true };
+    const wakeEvents = [];
+    if (dependencies.wildcard || dependencies.variableKeys?.length || dependencies.publicVariableIds?.length) {
+      wakeEvents.push("variable:changed");
+    }
+    if (dependencies.wildcard || dependencies.gameClock || dependencies.publicVariableIds?.length) {
+      wakeEvents.push("gameClock:changed");
+    }
+    const unsubscribers = wakeEvents.map((eventName) => {
+      const wakeHandler = () => {
+        if (generation !== waitGeneration || cancelled || paused || instance.status === "resolved") return;
+        const unsubscribe = waitUnsubscribe;
+        if (!unsubscribe) return;
+        waitUnsubscribe = null;
+        waitGeneration += 1;
+        unsubscribe();
+        run(node.id);
+      };
+      const onEvent = eventName === "variable:changed"
+        ? (change) => dependencies.wildcard
+          || dependencies.variableKeys?.includes(change?.key)
+          || dependencies.publicVariableIds?.includes(Number(change?.id))
+          || (change && typeof change === "object" && Object.keys(change).some((key) => dependencies.publicVariableIds?.includes(Number(key))))
+        : () => true;
+      const filteredWakeHandler = (payload) => {
+        if (!onEvent(payload)) return;
+        wakeHandler();
+      };
+      /* DEV-TOOLS:START */
+      filteredWakeHandler.__cultistsPerformanceLabel = `wait:${definition.id}:${node.id}`;
+      /* DEV-TOOLS:END */
+      return eventBus.on(eventName, filteredWakeHandler);
+    });
+    waitUnsubscribe = () => {
+      if (waitGeneration === generation) waitGeneration += 1;
+      unsubscribers.forEach((fn) => fn());
+    };
   }
 
-  function run(nodeId, skipBreakpointNodeId = null) {
+  function enterNode(current, nodeType, isResumeEntry, skipBreakpointNodeId) {
+    const node = blueprint.nodes[current];
+    if (!node) throw new Error(`Unknown flow node: ${current}`);
+    instance.currentNodeId = current;
+    if (breakpointNodeIdSet.has(current) && !(isResumeEntry && current === skipBreakpointNodeId)) {
+      const step = recordExecutionStep(current, "breakpoint");
+      paused = true;
+      instance.status = "paused";
+      instance.pausedAtBreakpointId = current;
+      instance.currentStep = { nodeId: current, type: nodeType, status: "breakpoint", step: step.step };
+      onCheckpoint(instance);
+      return 2;
+    }
+    // Only the resumed entry node is eligible for the save/restore skip.
+    if (isResumeEntry && ONE_SHOT_NODE_TYPES.has(nodeType) && executedNodeIdSet.has(current)) {
+      const step = recordExecutionStep(current, "skipped");
+      instance.currentStep = { nodeId: current, type: nodeType, status: "skipped", step: step.step };
+      return 1;
+    }
+    const step = recordExecutionStep(current, "running");
+    instance.currentStep = { nodeId: current, type: nodeType, status: "running", step: step.step };
+    /* DEV-TOOLS:START */
+    if (nodeStartedAtById) nodeStartedAtById.set(current, globalThis.performance.now());
+    /* DEV-TOOLS:END */
+    return 0;
+  }
+
+  function replaceMacroParameters(value, parameters) {
+    if (Array.isArray(value)) return value.map((item) => replaceMacroParameters(item, parameters));
+    if (!value || typeof value !== "object") return value;
+    if (Object.keys(value).length === 1 && typeof value.parameter === "string") {
+      return structuredClone(parameters[value.parameter]);
+    }
+    return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, replaceMacroParameters(child, parameters)]));
+  }
+
+  function runMacro(compiledMacro, nodeId, macroNode, parameters) {
+    if (!compiledMacro?.blueprint) throw new Error(`Unhandled custom blueprint node: ${macroNode.type}`);
+    const macroBlueprint = compiledMacro.blueprint;
+    const nodeOverrides = structuredClone(macroBlueprint.nodes);
+    for (const node of Object.values(nodeOverrides)) node.inputs = replaceMacroParameters(node.inputs || {}, parameters);
+    const childInstance = {
+      instanceId: `${instance.instanceId}:custom:${nodeId}`,
+      status: "pending",
+      currentNodeId: macroBlueprint.startNodeId,
+      executedNodeIds: [],
+      waitingNodeId: null,
+    };
+    const childRunner = createActivityRunner({
+      definition: { id: macroNode.type, blueprint: macroBlueprint, compiled: compiledMacro },
+      instance: childInstance,
+      variableStore,
+      eventBus,
+      timeGateway,
+      windowGateway,
+      activityGateway,
+      eventGateway,
+      dbGateway,
+      pvGateway,
+      runtimeGateway,
+      eventStateGateway,
+      apiGateway,
+      onCheckpoint: () => {},
+      onComplete: () => {},
+    });
+    childRunner.start(parameters, nodeOverrides);
+    if (childInstance.status !== "resolved") {
+      throw new Error(`Custom blueprint node ${macroNode.type} entered a waiting state; reusable nodes must complete synchronously`);
+    }
+    return { returnPort: childInstance.returnPort };
+  }
+
+  function run(nodeId, skipBreakpointNodeId = null, macroParams = {}, nodeOverrides = null) {
     if (cancelled || paused || instance.status === "resolved") return;
+    /* DEV-TOOLS:START */
+    const flowStartedAt = Array.isArray(performanceSamples) ? globalThis.performance.now() : null;
+    /* DEV-TOOLS:END */
     const result = compiledActivity.run(nodeId, {
-      executeNode(current, node, isResumeEntry) {
-        if (!node) throw new Error(`Unknown flow node: ${current}`);
-        instance.currentNodeId = current;
-        if (instance.breakpointNodeIds.includes(current) && !(isResumeEntry && current === skipBreakpointNodeId)) {
-          const step = recordExecutionStep(current, "breakpoint");
-          paused = true;
-          instance.status = "paused";
-          instance.pausedAtBreakpointId = current;
-          instance.currentStep = { nodeId: current, type: node.type, status: "breakpoint", step: step.step };
-          onCheckpoint(instance);
-          return { stop: true, breakpoint: true };
-        }
-        // The already-executed skip only applies to the node we are resuming
-        // into after a save/restore. Nodes reached later in this run—including
-        // loop bodies revisited many times—must still execute.
-        if (isResumeEntry && ONE_SHOT_NODE_TYPES.has(node.type) && instance.executedNodeIds.includes(current)) {
-          const step = recordExecutionStep(current, "skipped");
-          instance.currentStep = { nodeId: current, type: node.type, status: "skipped", step: step.step };
-          return { skip: true, next: nextFlow(blueprint, node) };
-        }
-        const step = recordExecutionStep(current, "running");
-        instance.currentStep = { nodeId: current, type: node.type, status: "running", step: step.step };
-        return execute(node);
-      },
-      onWait(current, node) {
+      enterNode,
+      onWait(current) {
+        const node = blueprint.nodes[current];
         if (lastTraceEntry?.nodeId === current) lastTraceEntry.status = "waiting";
         instance.waitingNodeId = node.id;
         instance.currentStep = { nodeId: node.id, type: node.type, status: "waiting", step: lastTraceEntry?.step };
         subscribeWait(node);
         onCheckpoint(instance);
       },
-      afterStep(current, node, next) {
+      afterStep(current, next) {
+        const node = blueprint.nodes[current];
+        /* DEV-TOOLS:START */
+        const nodeStartedAt = nodeStartedAtById?.get(current);
+        const checkpointStartedAt = Array.isArray(performanceSamples) ? globalThis.performance.now() : null;
+        /* DEV-TOOLS:END */
         markExecuted(node);
         if (lastTraceEntry?.nodeId === current) lastTraceEntry.status = "executed";
         instance.waitingNodeId = null;
@@ -753,15 +488,62 @@ export function createActivityRunner({
         instance.currentStep = next
           ? { nodeId: next, type: blueprint.nodes[next]?.type || null, status: "pending", step: instance.executionStep + 1 }
           : null;
-        onCheckpoint(instance);
+        onCheckpoint(instance, { notify: false });
+        /* DEV-TOOLS:START */
+        if (Array.isArray(performanceSamples) && Number.isFinite(nodeStartedAt) && Number.isFinite(checkpointStartedAt)) {
+          const finishedAt = globalThis.performance.now();
+          performanceSamples.push({
+            name: "activity-node",
+            activityId: definition.id,
+            nodeId: current,
+            nodeType: node.type,
+            durationMs: finishedAt - nodeStartedAt,
+            checkpointMs: finishedAt - checkpointStartedAt,
+          });
+          nodeStartedAtById.delete(current);
+        }
+        /* DEV-TOOLS:END */
       },
-    });
+      finish,
+      runMacro,
+      applyArithmetic,
+      errorMessage: t,
+      debugLog(kind, nodeId, payload) {
+        /* DEV-TOOLS:START */
+        console.log(`[NG dialogue] ActivityRunner ${kind} node`, { activityId: definition.id, nodeId, payload });
+        /* DEV-TOOLS:END */
+      },
+      instance,
+      variableStore,
+      timeGateway,
+      windowGateway,
+      activityGateway,
+      eventGateway,
+      dbGateway,
+      pvGateway,
+      runtimeGateway,
+      eventStateGateway,
+      onboardingGateway,
+      apiGateway,
+      executionState,
+    }, macroParams, skipBreakpointNodeId, nodeOverrides);
+    /* DEV-TOOLS:START */
+    if (Array.isArray(performanceSamples) && Number.isFinite(flowStartedAt)) {
+      performanceSamples.push({
+        name: "activity-generated-run",
+        activityId: definition.id,
+        durationMs: globalThis.performance.now() - flowStartedAt,
+        steps: result.steps,
+        status: result.status,
+      });
+    }
+    /* DEV-TOOLS:END */
     if (result.status === "limit") throw new Error(t("error.eba2b6ab7973"));
     if (result.status === "completed") finish("completed");
   }
 
-  function start() {
-    run(instance.currentNodeId || blueprint.startNodeId);
+  function start(macroParams = {}, nodeOverrides = null) {
+    run(instance.currentNodeId || blueprint.startNodeId, null, macroParams, nodeOverrides);
   }
 
   function pause() {
@@ -838,6 +620,7 @@ export function createActivityRunner({
     const normalized = [...new Set(nodeIds.map(String))];
     if (normalized.some((nodeId) => !compiledActivity.flowNodeIds.includes(nodeId))) return false;
     instance.breakpointNodeIds = normalized;
+    breakpointNodeIdSet = new Set(normalized);
     onCheckpoint(instance);
     return true;
   }

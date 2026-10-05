@@ -51,16 +51,20 @@
 - framework 的默认游戏状态为第 1 天 `08:00`、`phase=day`、`duty=on-duty`、`location=work`；工作窗口为 `[08:00, 16:00)`。`phase`、`duty`、`location` 是 framework 的独立字段，恢复存档时必须保持一致。
 - 普通成功行动默认推进 20 分钟；长时间成本按现有 Activity/NGL 约定拆分，不在 UI 层偷偷推进时间。
 - 存档恢复、跨日、睡眠、医疗、收入支出、队列和动态 Activity 的所有状态变化必须有明确 owner 和恢复顺序。
+- Activity 队列保留有序 `entries`，并维护按稳定 `instanceId` 索引的 Map；append/remove/restore 必须同步该索引，运行时逐节点 get/update 不得线性扫描整个队列。
 - 运行时集合定义可声明 `stateAliases`，由通用恢复流程把旧稳定 ID 归一到 canonical ID；core 不得写入具体游戏 ID，冲突时 canonical 记录优先。
 - 运行时集合可通过声明式 `derivedFields`、数据库 lookup、`prepend` 和 `stateCollectionId` 生成筛选字段、占位选项并复用 canonical 收集状态；窗口筛选应使用稳定 ID 和通用集合过滤，不在 renderer 或业务 JavaScript 中硬编码来源/类别判断。
 - 运行时集合还可通过通用 `activityQueueId` 投影 Activity 队列；core 只负责队列记录和可选 payload 投影，具体联系人/业务字段必须由 framework/game 数据声明，队列变化通过 `runtime:collection-changed` 驱动窗口刷新。
 - Activity 的对话 transcript 可随实例保存，并通过通用回放能力向声明的 display receiver 重放；回放只能发送已保存的显示事件，不得重新执行蓝图或产生时间、资源和剧情副作用。
+- Activity 每个节点执行后都必须同步更新队列中的实例检查点；纯同步步骤不得逐节点广播 `activity:changed`，以免每一步触发所有数据窗口重建 DOM。窗口对变量、时钟和运行时集合失效事件必须按浏览器帧合并根节点重绘，并忽略已销毁窗口的排队刷新；等待、断点、终止及显式生命周期操作仍通知订阅者。
 - 蓝图节点只能使用项目定义的合法端口组合；新增节点必须同时通过 schema 校验、运行时探针和相关编辑器验证。
 - CL2 内嵌值绑定必须递归解析；自定义流程节点的隐式 `default` 必须映射到其声明的首个流程出口，framework 宏不得调用未注册的领域 API。
 - 显示节点的 canonical `text` 调用使用 `displayTo, speaker, text, ...` 顺序；动态窗口组件复制必须合并模板事件，不能因生命周期事件覆盖 `onAdd`/`onRemove` 等交互蓝图。
 - CL2（Cultists Blueprint & Script Language 2）统一脚本图语言规范见 [`cl2-language.md`](cl2-language.md)。Activity 运行时、定义存储和编辑器均使用 CL2；旧 JSON 仅作为迁移审计输入，不是生产 Activity source。CL2 采用显式节点 ID、`option<x>` 分支、`default` 默认出口、纯值函数和 `if` 回边。
-- Activity 定义加载时必须先校验 CL2，再将流程图编译为 JavaScript 执行器；生成代码只包含安全转义的稳定节点 ID，节点副作用仍通过 core 的通用 ActivityRunner 网关执行并保留等待、检查点和恢复语义。编译结果须保留稳定步骤 ID、源码映射和生成源码供开发人员模式调试，不写入存档。
-- Activity 实例的当前节点、执行步骤/trace、已执行节点、等待位置和断点必须随队列存档；断点使用稳定节点 ID，恢复时先重建 runner 并停在断点，显式继续后跳过该断点一次再执行，禁止在恢复过程中重放已完成副作用。
+- Activity 定义加载时必须先校验 CL2，再将流程节点操作、静态流程目标和纯值表达式专门编译为 JavaScript；必须在编译期折叠可判定常量，不得把通用 `executeNode`/递归值解析器包进生成函数冒充 JIT。通用生命周期回调可保留等待、检查点和恢复语义，所有宿主副作用仍通过 core 能力网关执行。生成源码中的稳定 ID 与数据字面量必须安全转义；编译结果须保留稳定步骤 ID、源码映射和生成源码供开发人员模式调试，不写入存档。
+- `blockUntil` 等待必须只订阅其可静态识别的变量/公共变量/时钟依赖；遇到动态或未知依赖时保守订阅通用唤醒事件，并用等待代次屏蔽已失效订阅的快照回调，避免无关变量更新导致重复重评。
+- JIT source map 的源码行号必须随生成过程线性累计；不得为每个节点重复扫描生成源码前缀。
+- Activity 实例的当前节点、执行步骤/trace、已执行节点、等待位置和断点必须随队列存档；断点使用稳定节点 ID，恢复时先重建 runner 并停在断点，显式继续后跳过该断点一次再执行，禁止在恢复过程中重放已完成副作用。Runner 对已执行节点和断点的热路径成员检查必须使用实例内索引，不能逐节点扫描存档数组。
 
 
 ## 数据、版权和字体

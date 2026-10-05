@@ -145,6 +145,7 @@ import { validateBlueprint } from "../core/ActivityValidator.js";
   const gameClock = new GameClock(eventBus);
   const pv = new PublicVariableManager(null, eventBus);
   pv.register({ id: 30, type: "integer", defaultValue: 0 }); // absolute minutes "now"
+  pv.register({ id: 31, type: "integer", defaultValue: 0 }); // unrelated public variable
   eventBus.on("gameClock:changed", ({ day, minutes }) => pv.set(30, (day - 1) * 1440 + minutes));
 
   const appointmentAt = 100; // absolute minutes
@@ -174,13 +175,37 @@ import { validateBlueprint } from "../core/ActivityValidator.js";
   const instance = queue.append({ activityId: "medicalAppointment" });
 
   let completedCount = 0;
+  let conditionEvaluationCount = 0;
   eventBus.on(ACTIVITY_EVENTS.completed, () => completedCount += 1);
 
-  activityExecutionService.run({ queue, definition: activityDefinitionStore.get("medicalAppointment"), instance, variableStore, pvGateway: pv });
+  activityExecutionService.run({
+    queue,
+    definition: activityDefinitionStore.get("medicalAppointment"),
+    instance,
+    variableStore,
+    pvGateway: {
+      evaluateCondition(condition) {
+        conditionEvaluationCount += 1;
+        return pv.evaluateCondition(condition);
+      },
+    },
+  });
   assert.equal(queue.get(instance.instanceId).status, "unresolved", "not due yet");
+  assert.equal(conditionEvaluationCount, 1, "initial wait condition is evaluated once");
+
+  pv.set(31, 1);
+  assert.equal(conditionEvaluationCount, 1, "unrelated public-variable updates do not re-run the wait");
+
+  pv.restore({ 30: 0, 31: 1 });
+  assert.equal(conditionEvaluationCount, 2, "public-variable snapshot restores wake dependencies present in the snapshot");
+
+  pv.set(30, 10);
+  assert.equal(conditionEvaluationCount, 3, "the referenced public variable wakes the wait");
+  assert.equal(queue.get(instance.instanceId).status, "unresolved");
 
   gameClock.advance(50); // 50 < 100, still not due
   assert.equal(queue.get(instance.instanceId).status, "unresolved");
+  assert.equal(conditionEvaluationCount, 4, "clock-synchronized public-variable changes wake the wait");
   assert.equal(completedCount, 0);
 
   gameClock.advance(50); // now at 100, exactly due

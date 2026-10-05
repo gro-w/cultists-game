@@ -21,6 +21,8 @@ assert.ok(definitions.every((definition) => definition.format === "CL2"));
 assert.ok(definitions.every((definition) => definition.sourcePath.endsWith(".CL2.txt")));
 assert.ok(definitions.every((definition) => definition.compiled?.mode === "javascript"));
 assert.ok(definitions.every((definition) => definition.compiled.blueprint === definition.blueprint));
+assert.ok(definitions.every((definition) => !/hooks\.executeNode\s*\(/.test(definition.compiled.debugInfo.source)));
+const generatedSourceBytes = definitions.reduce((total, definition) => total + Buffer.byteLength(definition.compiled.debugInfo.source), 0);
 
 let embeddedCount = 0;
 let multilineCount = 0;
@@ -86,7 +88,9 @@ const waitDebugState = waitingRunner.getDebugState();
 assert.equal(waitDebugState.currentNodeId, "wait");
 assert.deepEqual(waitDebugState.compiled.nodeIds, ["start", "set", "wait", "end"]);
 assert.ok(waitDebugState.compiled.sourceMap.wait.sourceLine > 0);
-assert.ok(waitDebugState.compiled.source.includes('case "wait"'));
+assert.ok(waitDebugState.compiled.source.includes("case 2:"));
+assert.doesNotMatch(waitDebugState.compiled.source, /hooks\.executeNode/);
+assert.match(waitDebugState.compiled.source, /variableStore\.set\(key, \(1\)\)/);
 waitingValues.set("ready", true);
 waitBus.emit("variable:changed", { key: "ready", value: true });
 assert.equal(waitingInstance.status, "resolved", "compiled flow must resume after its wait condition changes");
@@ -112,4 +116,4 @@ createActivityRunner({
 }).start();
 assert.equal(restoredValues.get("restored"), 3, "restoring at an executed one-shot node must preserve its prior side-effect result");
 assert.equal(restoredInstance.status, "resolved");
-console.log(`cl2-runtime-probe: ${definitions.length} activities, ${embeddedCount} embedded blueprints, ok`);
+console.log(`cl2-runtime-probe: ${definitions.length} activities, ${embeddedCount} embedded blueprints, ${generatedSourceBytes} generated JS bytes, ok`);

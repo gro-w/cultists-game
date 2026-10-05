@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cultists runtime performance audit</title>
+  <style>
+    :root { color-scheme: light dark; font: 14px system-ui, sans-serif; }
+    body { margin: 0; }
+    header { position: sticky; top: 0; z-index: 2; padding: 12px; background: Canvas; border-bottom: 1px solid GrayText; }
+    h1 { margin: 0 0 6px; font-size: 16px; }
+    pre { margin: 0; max-height: 28vh; overflow: auto; white-space: pre-wrap; }
+    iframe { display: block; width: 100%; height: 72vh; border: 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cultists runtime performance audit</h1>
+    <pre id="status">Loading a same-origin game frame and observing long tasks / frame gaps…</pre>
+  </header>
+  <iframe id="game" title="Cultists game under performance audit"></iframe>
+  <script type="module">
+    const status = document.querySelector("#status");
+    const frame = document.querySelector("#game");
+    const startedAt = performance.now();
+    const longTasks = [];
+    const frameGaps = [];
+    let clickAt = null;
+    let clickEndedAt = null;
+    let finished = false;
+
+    if (PerformanceObserver.supportedEntryTypes?.includes("longtask")) {
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          longTasks.push({
+            start: entry.startTime,
+            duration: entry.duration,
+            containers: (entry.attribution || []).map((item) => ({ type: item.containerType, name: item.name })),
+          });
+        }
+      }).observe({ type: "longtask", buffered: true });
+    }
+
+    let previousFrameAt = null;
+    function sampleFrame(time) {
+      if (previousFrameAt !== null) frameGaps.push({ at: time, gap: time - previousFrameAt });
+      previousFrameAt = time;
+      if (!finished) requestAnimationFrame(sampleFrame);
+    }
+    requestAnimationFrame(sampleFrame);
+
+    function publish(result) {
+      finished = true;
+      const bootGaps = frameGaps.filter((sample) => clickAt === null || sample.at < clickAt);
+      const interactionGaps = frameGaps.filter((sample) => clickAt !== null && sample.at >= clickAt);
+      const allGaps = frameGaps.map((sample) => sample.gap);
+      status.textContent = JSON.stringify({
+        ...result,
+        totalAuditMs: Math.round(performance.now() - startedAt),
+        longTaskSupport: PerformanceObserver.supportedEntryTypes?.includes("longtask") || false,
+        longTaskCount: longTasks.length,
+        clickDurationMs: clickAt === null || clickEndedAt === null ? null : Math.round((clickEndedAt - clickAt) * 10) / 10,
+        longestTasks: [...longTasks]
+          .map((task) => ({
+            start: Math.round(task.start),
+            duration: Math.round(task.duration * 10) / 10,
+            containers: task.containers,
+            phase: clickAt !== null && clickEndedAt !== null && task.start < clickEndedAt && task.start + task.duration > clickAt
+              ? "overlaps-activation"
+              : clickAt !== null && task.start >= clickAt ? "after-activation-start" : "before-activation",
+            startOffsetFromActivationMs: clickAt === null ? null : Math.round(task.start - clickAt),
+            activationOverlapMs: clickAt === null || clickEndedAt === null ? 0 : Math.max(0, Math.round((Math.min(task.start + task.duration, clickEndedAt) - Math.max(task.start, clickAt)) * 10) / 10),
+          }))
+          .sort((a, b) => b.duration - a.duration)
+          .slice(0, 12),
+        frameSamples: frameGaps.length,
+        maxFrameGapMs: Math.round(Math.max(0, ...allGaps) * 10) / 10,
+        bootFrameGapsOver32ms: bootGaps.filter((sample) => sample.gap > 32).length,
+        interactionFrameGapsOver32ms: interactionGaps.filter((sample) => sample.gap > 32).length,
+        largestFrameGaps: [...frameGaps].sort((a, b) => b.gap - a.gap).slice(0, 8).map(({ at, gap }) => ({ at: Math.round(at), gapMs: Math.round(gap * 10) / 10 })),
+        contentTail: frame.contentDocument?.body?.innerText?.slice(-1200) || "",
+      }, null, 2);
+    }
+
+    frame.addEventListener("load", () => {
+      const childWindow = frame.contentWindow;
+      const navigation = childWindow.performance.getEntriesByType("navigation")[0];
+      const navigationSummary = navigation ? {
+        responseEndMs: Math.round(navigation.responseEnd),
+        domContentLoadedMs: Math.round(navigation.domContentLoadedEventEnd),
+        loadEventMs: Math.round(navigation.loadEventEnd),
+      } : null;
+      const deadline = performance.now() + 20000;
+      const waitForDesktop = () => {
+        const doc = frame.contentDocument;
+        const params = new URLSearchParams(location.search);
+        const targets = {
+          his: { id: "his-custom", title: "HIS 医疗系统" },
+          chatgtp: { id: "chatgtp", title: "ChatGTP" },
+          calendar: { id: "calendar", title: "日历" },
+          notebook: { id: "notebook", title: "笔记本" },
+          settings: { id: "settings", title: "设置" },
+        };
+        const target = targets[params.get("target")] || targets.his;
+        const { id: targetId, title: targetTitle } = target;
+        const targetButton = doc?.querySelector(`button[data-icon-id="${targetId}"]`);
+        const developerModeReady = [...(doc?.querySelectorAll(".ng-window .ng-title") || [])]
+          .some((title) => title.textContent === "开发人员模式");
+        if (targetButton && developerModeReady) {
+          childWindow.__cultistsPerformanceSamples = [];
+          clickAt = performance.now();
+          const clickStartedAt = performance.now();
+          targetButton.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, detail: 2 }));
+          const synchronousActivationMs = performance.now() - clickStartedAt;
+          clickEndedAt = performance.now();
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            setTimeout(() => {
+              const openWindows = [...childWindow.document.querySelectorAll(".ng-window .ng-title")].map((title) => title.textContent);
+              const samples = childWindow.__cultistsPerformanceSamples;
+              const stageTimings = samples.filter((sample) => !["activity-node", "event-bus-dispatch", "event-bus-listener"].includes(sample.name)).map((sample) => ({
+                name: sample.name,
+                durationMs: Math.round(sample.durationMs * 100) / 100,
+                activityId: sample.activityId,
+                queueId: sample.queueId,
+                nodeCount: sample.nodeCount,
+                flowNodeCount: sample.flowNodeCount,
+                steps: sample.steps,
+                reusedCompilation: sample.reusedCompilation,
+                widgetCount: sample.widgetCount,
+                windowId: sample.windowId,
+              }));
+              const slowestActivityNodes = samples
+                .filter((sample) => sample.name === "activity-node")
+                .sort((a, b) => b.durationMs - a.durationMs)
+                .slice(0, 12)
+                .map((sample) => ({
+                  activityId: sample.activityId,
+                  nodeId: sample.nodeId,
+                  nodeType: sample.nodeType,
+                  durationMs: Math.round(sample.durationMs * 100) / 100,
+                  checkpointMs: Math.round(sample.checkpointMs * 100) / 100,
+                }));
+              const slowestEventDispatches = samples
+                .filter((sample) => sample.name === "event-bus-dispatch")
+                .sort((a, b) => b.durationMs - a.durationMs)
+                .slice(0, 12)
+                .map((sample) => ({
+                  event: sample.event,
+                  listenerCount: sample.listenerCount,
+                  durationMs: Math.round(sample.durationMs * 100) / 100,
+                }));
+              const slowestEventHandlers = samples
+                .filter((sample) => sample.name === "event-bus-listener")
+                .sort((a, b) => b.durationMs - a.durationMs)
+                .slice(0, 12)
+                .map((sample) => ({
+                  event: sample.event,
+                  listenerLabel: sample.listenerLabel,
+                  durationMs: Math.round(sample.durationMs * 100) / 100,
+                }));
+              publish({
+                target: targetId,
+                result: openWindows.includes(targetTitle)
+                  ? `${targetTitle} opened through the live desktop icon double-click handler`
+                  : `double-click handler ran but the ${targetTitle} window did not appear`,
+                navigation: navigationSummary,
+                timeToReadyMs: Math.round(clickAt - startedAt),
+                synchronousActivationMs: Math.round(synchronousActivationMs * 100) / 100,
+                stageMeasurementsAvailable: stageTimings.some((sample) => sample.name === "activity-jit-compile")
+                  && stageTimings.some((sample) => sample.name === "activity-generated-run")
+                  && slowestEventDispatches.length > 0
+                  && slowestEventHandlers.length > 0
+                  && stageTimings.some((sample) => sample.name === "desktop-window-mount"),
+                stageTimings,
+                slowestActivityNodes,
+                slowestEventDispatches,
+                slowestEventHandlers,
+                gameTitle: childWindow.document.title,
+                openWindows,
+                targetWindowOpen: openWindows.includes(targetTitle),
+              });
+            }, 2000);
+          }));
+          return;
+        }
+        if (performance.now() >= deadline) {
+          publish({ result: "timed out waiting for the HIS launcher", navigation: navigationSummary });
+          return;
+        }
+        setTimeout(waitForDesktop, 100);
+      };
+      waitForDesktop();
+    }, { once: true });
+
+    frame.src = "/?dev";
+    setTimeout(() => {
+      if (!finished) publish({ result: "timed out waiting for game load" });
+    }, 30000);
+  </script>
+</body>
+</html>

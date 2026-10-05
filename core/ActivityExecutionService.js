@@ -61,9 +61,9 @@ export class ActivityExecutionService {
       runtimeGateway: runtimeGateway || this.runtimeGateway,
       eventStateGateway: eventStateGateway || onboardingGateway,
       apiGateway,
-      onCheckpoint: (updated) => {
+      onCheckpoint: (updated, { notify = true } = {}) => {
         queue.update(updated.instanceId, updated);
-        this.eventBus.emit(ACTIVITY_EVENTS.changed, { queueId: queue.queueId, instance: { ...updated } });
+        if (notify) this.eventBus.emit(ACTIVITY_EVENTS.changed, { queueId: queue.queueId, instance: { ...updated } });
       },
       onComplete: (updated, reason) => {
         queue.update(updated.instanceId, updated);

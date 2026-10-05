@@ -12,6 +12,7 @@ export class ActivityQueue {
     this.queueId = queueId;
     this.nonBlocking = Boolean(options.nonBlocking);
     this.entries = [];
+    this._entriesById = new Map();
     this._sequence = new Map();
   }
 
@@ -31,11 +32,12 @@ export class ActivityQueue {
       receivedPhase,
     });
     this.entries.push(instance);
+    if (!this._entriesById.has(instance.instanceId)) this._entriesById.set(instance.instanceId, instance);
     return instance;
   }
 
   get(instanceId) {
-    return this.entries.find((entry) => entry.instanceId === instanceId) || null;
+    return this._entriesById.get(instanceId) || null;
   }
 
   /** Read-only list for blueprint/debugger APIs. */
@@ -54,7 +56,12 @@ export class ActivityQueue {
   remove(instanceId) {
     const index = this.entries.findIndex((entry) => entry.instanceId === instanceId);
     if (index < 0) return false;
-    this.entries.splice(index, 1);
+    const [removed] = this.entries.splice(index, 1);
+    if (this._entriesById.get(instanceId) === removed) {
+      const duplicate = this.entries.find((entry) => entry.instanceId === instanceId);
+      if (duplicate) this._entriesById.set(instanceId, duplicate);
+      else this._entriesById.delete(instanceId);
+    }
     return true;
   }
 
@@ -114,6 +121,7 @@ export class ActivityQueue {
       }
       return restored;
     });
+    this._entriesById = new Map(this.entries.map((entry) => [entry.instanceId, entry]));
     this._sequence = new Map();
     this.entries.forEach((entry) => {
       const match = String(entry.instanceId).match(/:(\d+)$/);

@@ -31,7 +31,8 @@ view._setStatus = (message, isError = false) => statuses.push({ message, isError
 view.model = createActivityEditorModel({ activityId: "demo", blueprint: blueprint("finish") });
 view._showCompiledJavaScript();
 const firstSource = view.generatedSourceEl.value;
-assert.match(firstSource, /case "finish"/);
+assert.match(firstSource, /hooks\.enterNode\("finish",/);
+assert.doesNotMatch(firstSource, /hooks\.executeNode/);
 assert.equal(view.generatedSourcePanelEl.hidden, false);
 assert.equal(view.generatedSourceErrorEl.hidden, true);
 
@@ -39,7 +40,7 @@ assert.equal(view.generatedSourceErrorEl.hidden, true);
 view.model = createActivityEditorModel({ activityId: "demo", blueprint: blueprint("finishUpdated") });
 view._showCompiledJavaScript();
 const secondSource = view.generatedSourceEl.value;
-assert.match(secondSource, /case "finishUpdated"/);
+assert.match(secondSource, /hooks\.enterNode\("finishUpdated",/);
 assert.notEqual(secondSource, firstSource);
 assert.equal(statuses.at(-1).isError, false);
 
@@ -50,12 +51,12 @@ view.model = createActivityEditorModel({ activityId: "demo", blueprint: blueprin
 view.sourceEl.value = serializeCl2(blueprint("sourceFinish"), { activityId: "demo" });
 view._showCompiledJavaScript();
 const firstTextSource = view.generatedSourceEl.value;
-assert.match(firstTextSource, /case "sourceFinish"/);
-assert.doesNotMatch(firstTextSource, /case "modelOnly"/);
+assert.match(firstTextSource, /hooks\.enterNode\("sourceFinish",/);
+assert.doesNotMatch(firstTextSource, /hooks\.enterNode\("modelOnly",/);
 
 view.sourceEl.value = serializeCl2(blueprint("sourceFinishUpdated"), { activityId: "demo" });
 view._showCompiledJavaScript();
-assert.match(view.generatedSourceEl.value, /case "sourceFinishUpdated"/);
+assert.match(view.generatedSourceEl.value, /hooks\.enterNode\("sourceFinishUpdated",/);
 assert.notEqual(view.generatedSourceEl.value, firstTextSource);
 
 // A failed compilation must not leave the previous successful source visible.

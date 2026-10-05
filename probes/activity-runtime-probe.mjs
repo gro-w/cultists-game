@@ -165,14 +165,17 @@ function makeEngine(definitions) {
   assert.equal(restoredQueue.get(instance.instanceId).status, "unresolved");
   assert.equal(terminalCount, 0);
   assert.deepEqual(timedMinutes, [20], "consumeTime must not re-fire for the already-executed node");
+  const waitingTraceLength = restoredQueue.get(instance.instanceId).executionTrace.length;
+  restoredEngine.variableStore.set("unrelated", true);
+  assert.equal(restoredQueue.get(instance.instanceId).executionTrace.length, waitingTraceLength, "unrelated variable changes do not re-evaluate blockUntil");
 
   // Now satisfy the wait condition and confirm it resumes to completion exactly once.
   restoredEngine.variableStore.set("approved", true);
   assert.equal(restoredQueue.get(instance.instanceId).status, "resolved");
   assert.equal(terminalCount, 1);
 
-  // Firing another unrelated variable change must not re-emit a terminal event.
-  restoredEngine.variableStore.set("approved", true);
+  // Firing another variable change after completion must not re-emit a terminal event.
+  restoredEngine.variableStore.set("unrelated", false);
   assert.equal(terminalCount, 1);
 }
 

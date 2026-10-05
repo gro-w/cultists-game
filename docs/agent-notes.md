@@ -28,7 +28,9 @@ media/                     历史宣传资源和设计稿
 
 当前 manifest 的主要连接关系：`game-manifest.json` → `framework-manifest.json`、`activity-manifest.json`、窗口 manifest、数据库、公共变量、本地变量和 Activity 列表。默认 Activity 是 `default`，队列定义包含 `work`、`social`、`managers`、`main` 以及窗口/Widget/桌面事件队列。
 
-CL2（Cultists Blueprint & Script Language 2）是当前 Activity 的生产脚本图格式。`core/Cl2Parser.js`、`core/Cl2Validator.js` 和 `core/Cl2Serializer.js` 提供统一解析、验证和编辑器回写；`core/Cl2Compiler.js` 在定义加载时把已验证的流程图编译成 JavaScript 状态机，并由 `ActivityRunner` 执行。生成代码只嵌入安全转义的节点 ID，副作用仍经通用节点执行器、网关和检查点处理，因此等待、循环、保存/恢复语义保持不变。编译结果同时保留 `debugInfo.nodeIds`、节点到生成源码行/端口/流程目标的 `sourceMap` 和生成源码；Activity Runner 的 `getDebugState()` 暴露当前步骤、等待状态、已执行节点和实例本地变量。开发人员模式可选择可执行流程步骤、设置节点断点、检查进度与变量并展开查看生成源码；编译/调试元数据只在内存中，而实例的 `executionStep`、`executionTrace`、断点列表/暂停节点、当前节点和已执行节点随 Activity 队列存档。存档版本 v8 开始持久化这些进度字段；恢复后重新挂接暂停 runner，继续时越过当前断点一次后执行，不重复已完成副作用。`data/activity-manifest.json` 的 Activity 均指向 `.CL2.txt`；旧 JSON 仅保留为迁移审计输入。
+CL2（Cultists Blueprint & Script Language 2）是当前 Activity 的生产脚本图格式。`core/Cl2Parser.js`、`core/Cl2Validator.js` 和 `core/Cl2Serializer.js` 提供统一解析、验证和编辑器回写；`core/Cl2Compiler.js` 与 `core/Cl2CodeGenerator.js` 在定义加载时把已验证的图编译成节点专门化 JavaScript：每个流程节点直接包含其操作，静态流程边降低为数字程序计数器目标，纯值依赖生成 JavaScript 表达式，并在编译期折叠常量算术和可静态判定的分支。生成执行器不再调用 `hooks.executeNode`，Activity 热路径也不递归调用 `resolveInput`/`evaluateValueOutput`；`evaluateValueOutput` 仅供 Activity 外的可用性等消费者使用。数字 PC 状态机仍负责支持循环、等待、断点和恢复；生命周期回调维护 trace/checkpoint，宿主副作用仍经过通用能力网关。编译器还为 `blockUntil` 生成公共变量、通用变量和时钟依赖；运行时只对可识别的相关事件重评等待条件，动态/未知依赖仍保守监听，等待代次可丢弃已失效的事件快照回调。队列实例在每个节点后同步更新，但纯同步节点不逐步广播 `activity:changed`；等待、断点、终止和显式生命周期操作仍通知订阅者。`WindowFrame` 将变量、时钟、Activity 和运行时集合失效请求合并到下一浏览器帧，每帧最多重建一次 widget 根节点，并丢弃窗口销毁后的待执行刷新，避免长 Activity 循环重复同步重绘所有窗口 DOM。`ActivityQueue` 同时保留有序实例数组与 `instanceId` 索引 Map，逐节点检查点通过索引更新，避免队列越长每步扫描开销越大。`ActivityRunner` 以实例内 Set 索引已执行节点与断点，避免每个节点都扫描随 Activity 增长的存档数组；`activity-execution-id-index-probe` 验证了长流程执行不再逐节点线性检查。编译结果保留 `debugInfo.nodeIds`、节点到生成源码行/端口/流程目标的 `sourceMap`、生成源码和优化计数；Activity Runner 的 `getDebugState()` 暴露当前步骤、等待状态、已执行节点和实例本地变量。开发人员模式可选择可执行流程步骤、设置节点断点、检查进度与变量并展开查看本次生成源码；编译/调试元数据只在内存中，而实例的 `executionStep`、`executionTrace`、断点列表/暂停节点、当前节点和已执行节点随 Activity 队列存档。存档版本 v8 开始持久化这些进度字段；恢复后重新挂接暂停 runner，继续时越过当前断点一次后执行，不重复已完成副作用。`data/activity-manifest.json` 的 Activity 均指向 `.CL2.txt`；旧 JSON 仅保留为迁移审计输入。
+
+`Cl2Compiler` 生成 source map 行号时按代码块增量累计换行数，避免对每个节点反复切片、扫描不断增长的源码前缀。`probes/cl2-source-map-performance-probe.mjs` 覆盖源码行映射正确性，并测量大型合成 Activity 的编译开销。
 
 CL2 也覆盖窗口事件、物品活动和自定义蓝图节点中的内嵌流程图：这些 JSON 内容使用 `{ "cl2": "..." }` 保存，`DataLoader` 在运行时解码为图，开发数据编辑器保存时重新编码为 CL2。
 
@@ -96,6 +98,17 @@ node dev-server.js --port 8001 --lang zh-hans
 ```bash
 # JavaScript 语法
 for f in $(git ls-files '*.js'); do node --check "$f"; done
+
+# JIT 直接代码生成与热路径基准
+node probes/cl2-jit-direct-codegen-probe.mjs
+node probes/cl2-jit-performance-probe.mjs
+node probes/cl2-source-map-performance-probe.mjs
+node probes/activity-checkpoint-coalescing-probe.mjs
+node probes/window-frame-refresh-coalescing-probe.mjs
+node probes/activity-queue-index-probe.mjs
+node probes/activity-queue-checkpoint-performance-probe.mjs
+node probes/activity-execution-id-index-probe.mjs
+node probes/public-variable-probe.mjs
 
 # JSON 全量校验
 python3 -c 'import json, pathlib; [json.load(open(p, encoding="utf-8")) for p in pathlib.Path(".").rglob("*.json") if ".git" not in p.parts and "publish" not in p.parts]'

@@ -26,6 +26,8 @@ export class WindowFrame {
     this.eventBus = eventBus;
     this.instanceId = state.instanceId;
     this._unsubscribers = [];
+    this._rootRefreshScheduled = false;
+    this._disposed = false;
     this._drag = new PointerInteraction();
     this._resize = new PointerInteraction();
     this._root = root;
@@ -43,9 +45,10 @@ export class WindowFrame {
    * A widget-tree window's bound properties (`{variable}`/`{nodeId,port}`,
    * see PropertyBinding.js) are only read at render time - there is no
    * per-property reactivity. Rather than build fine-grained dependency
-   * tracking, this re-renders the *whole* `root` subtree on every
-   * `variable:changed` event. This keeps declarative windows deterministic
-   * without retaining a second widget tree.
+   * tracking, invalidations coalesce into one whole-root render per browser
+   * frame. This keeps declarative windows deterministic without retaining a
+   * second widget tree or rebuilding it repeatedly during synchronous Activity
+   * bursts.
    * This is what makes purely declarative windows (patient rosters,
    * dropdowns fed by `findRecords`, etc.) able to reflect an `onCreate`/
    * widget-event blueprint's `setVariable` output without any
@@ -53,13 +56,23 @@ export class WindowFrame {
    */
   _bindRootRefresh() {
     if (!this._root) return;
-    this._unsubscribers.push(this.eventBus.on("variable:changed", () => this._rerenderRoot()));
-    this._unsubscribers.push(this.eventBus.on("gameClock:changed", () => this._rerenderRoot()));
-    this._unsubscribers.push(this.eventBus.on("activity:completed", () => this._rerenderRoot()));
-    this._unsubscribers.push(this.eventBus.on("activity:cancelled", () => this._rerenderRoot()));
-    this._unsubscribers.push(this.eventBus.on("activity:appended", () => this._rerenderRoot()));
-    this._unsubscribers.push(this.eventBus.on("activity:changed", () => this._rerenderRoot()));
-    this._unsubscribers.push(this.eventBus.on("runtime:collection-changed", () => this._rerenderRoot()));
+    this._unsubscribers.push(this.eventBus.on("variable:changed", () => this._scheduleRootRefresh()));
+    this._unsubscribers.push(this.eventBus.on("gameClock:changed", () => this._scheduleRootRefresh()));
+    this._unsubscribers.push(this.eventBus.on("activity:completed", () => this._scheduleRootRefresh()));
+    this._unsubscribers.push(this.eventBus.on("activity:cancelled", () => this._scheduleRootRefresh()));
+    this._unsubscribers.push(this.eventBus.on("activity:appended", () => this._scheduleRootRefresh()));
+    this._unsubscribers.push(this.eventBus.on("activity:changed", () => this._scheduleRootRefresh()));
+    this._unsubscribers.push(this.eventBus.on("runtime:collection-changed", () => this._scheduleRootRefresh()));
+  }
+
+  _scheduleRootRefresh() {
+    if (!this._root || this._disposed || this._rootRefreshScheduled) return;
+    this._rootRefreshScheduled = true;
+    const schedule = globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 0));
+    schedule(() => {
+      this._rootRefreshScheduled = false;
+      if (!this._disposed && this._root) this._rerenderRoot();
+    });
   }
 
   /**
@@ -318,6 +331,8 @@ export class WindowFrame {
 
   /** Detach every DOM/EventBus subscription and cancel in-flight gestures. */
   dispose() {
+    this._disposed = true;
+    this._root = null;
     this._drag.cancel();
     this._resize.cancel();
     this._unsubscribers.forEach((unsubscribe) => unsubscribe());

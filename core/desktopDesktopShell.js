@@ -231,10 +231,26 @@ export class DesktopShell {
   }
 
   _mountFrame(instanceId) {
+    /* DEV-TOOLS:START */
+    const mountStartedAt = globalThis.performance?.now?.();
+    /* DEV-TOOLS:END */
     const state = this.windowManager.get(instanceId);
     if (!state) return;
     const definition = this.windowDefinitionStore.get(state.windowId);
+    /* DEV-TOOLS:START */
+    const cloneStartedAt = globalThis.performance?.now?.();
+    /* DEV-TOOLS:END */
     const runtimeRoot = structuredClone(definition?.root || null);
+    /* DEV-TOOLS:START */
+    const samples = globalThis.__cultistsPerformanceSamples;
+    if (Array.isArray(samples) && Number.isFinite(cloneStartedAt)) {
+      samples.push({
+        name: "window-root-clone",
+        durationMs: globalThis.performance.now() - cloneStartedAt,
+        windowId: state.windowId,
+      });
+    }
+    /* DEV-TOOLS:END */
     this.runtimeRoots.set(instanceId, runtimeRoot);
     this._ensureDialogueViews(definition?.root);
     const rendererCtx = {
@@ -271,9 +287,30 @@ export class DesktopShell {
     // state.title (which stays the plain literal/fallback used for the
     // taskbar and singleInstance lookups).
     const title = resolvePropertyValue(definition?.title, rendererCtx, state.title);
+    /* DEV-TOOLS:START */
+    const frameStartedAt = globalThis.performance?.now?.();
+    /* DEV-TOOLS:END */
     const frame = new WindowFrame(this.windowManager, this.eventBus, { ...state, title }, dialogueBody || definition?.body, dialogueBody ? null : runtimeRoot, rendererCtx);
+    /* DEV-TOOLS:START */
+    if (Array.isArray(samples) && Number.isFinite(frameStartedAt)) {
+      samples.push({
+        name: "window-frame-construction",
+        durationMs: globalThis.performance.now() - frameStartedAt,
+        windowId: state.windowId,
+      });
+    }
+    /* DEV-TOOLS:END */
     this.frames.set(instanceId, frame);
     this.windowLayerEl.appendChild(frame.el);
+    /* DEV-TOOLS:START */
+    if (Array.isArray(samples) && Number.isFinite(mountStartedAt)) {
+      samples.push({
+        name: "desktop-window-mount",
+        durationMs: globalThis.performance.now() - mountStartedAt,
+        windowId: state.windowId,
+      });
+    }
+    /* DEV-TOOLS:END */
   }
 
   _ensureDialogueViews(node) {

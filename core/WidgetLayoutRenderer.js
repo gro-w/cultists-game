@@ -637,9 +637,23 @@ export function renderWidgetNode(node, ctx = {}) {
 
 /** Render a whole window's `root` widget tree; returns { el, widgetEls }. */
 export function renderWindowRoot(root, ctx = {}) {
+  /* DEV-TOOLS:START */
+  const renderStartedAt = globalThis.performance?.now?.();
+  /* DEV-TOOLS:END */
   ctx.widgetEls = new Map();
   ctx.controlEls = new Map();
   const el = renderWidgetNode(root, ctx);
+  /* DEV-TOOLS:START */
+  const samples = globalThis.__cultistsPerformanceSamples;
+  if (Array.isArray(samples) && Number.isFinite(renderStartedAt)) {
+    samples.push({
+      name: "widget-root-render",
+      durationMs: globalThis.performance.now() - renderStartedAt,
+      widgetCount: ctx.widgetEls.size,
+      rootType: root?.type || null,
+    });
+  }
+  /* DEV-TOOLS:END */
   return { el, widgetEls: ctx.widgetEls };
 }
 
