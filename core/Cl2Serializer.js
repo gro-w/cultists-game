@@ -2,6 +2,12 @@ import { getActivityNodeDefinition } from "./ActivityNodeRegistry.js";
 
 function json(value) { return JSON.stringify(value, null, 0); }
 function isWire(value) { return value && typeof value === "object" && !Array.isArray(value) && value.nodeId; }
+function positionSuffix(node) {
+  const x = Number(node.x);
+  const y = Number(node.y);
+  if (!Number.isFinite(x) && !Number.isFinite(y)) return "";
+  return ` /** @cl2.pos ${Number.isFinite(x) ? x : 0},${Number.isFinite(y) ? y : 0} */`;
+}
 function valueExpression(value, reusableIds) {
   if (isWire(value)) {
     const id = reusableIds.has(value.nodeId) ? value.nodeId : value.nodeId;
@@ -42,8 +48,10 @@ export function serializeCl2(graph, { activityId = null, includeHeader = true } 
   });
   const receiverNodes = Object.values(nodes).filter((node) => {
     const definition = getActivityNodeDefinition(node.type);
-    return (node.cl2Class === "valueReceiver" || Boolean(definition?.valueInputs?.length))
-      && !definition?.flowInputs?.length && !definition?.flowOutputs?.length && !definition?.valueOutputs?.length;
+    const explicitReceiver = node.cl2Class === "valueReceiver";
+    const implicitReceiver = Boolean(definition?.valueInputs?.length) && !definition?.valueOutputs?.length;
+    return (explicitReceiver || implicitReceiver)
+      && !definition?.flowInputs?.length && !definition?.flowOutputs?.length;
   });
   const reusableIds = new Set(valueNodes.map((node) => node.id));
   const lines = [];
@@ -53,12 +61,12 @@ export function serializeCl2(graph, { activityId = null, includeHeader = true } 
   }
   for (const node of valueNodes) {
     const args = orderedInputs(node).map((value) => valueExpression(value, reusableIds)).join(", ");
-    lines.push(`reusablevalue ${node.id}: ${functionName(node.type)}[${args}];`);
+    lines.push(`reusablevalue ${node.id}: ${functionName(node.type)}[${args}];${positionSuffix(node)}`);
   }
   if (valueNodes.length) lines.push("");
   for (const node of receiverNodes) {
     const args = orderedInputs(node).map((value) => valueExpression(value, reusableIds)).join(", ");
-    lines.push(`inputvalue ${node.id}: ${functionName(node.type)}[${args}];`);
+    lines.push(`inputvalue ${node.id}: ${functionName(node.type)}[${args}];${positionSuffix(node)}`);
   }
   if (receiverNodes.length) lines.push("");
   const flowIds = flowNodes.map((node) => node.id);
@@ -74,7 +82,7 @@ export function serializeCl2(graph, { activityId = null, includeHeader = true } 
     }
     if (edges.length) line += ` {\n${edges.join("\n")}\n}`;
     line += ";";
-    if (Number.isFinite(Number(node.x)) || Number.isFinite(Number(node.y))) line += ` /** @cl2.pos ${Number(node.x) || 0},${Number(node.y) || 0} */`;
+    line += positionSuffix(node);
     lines.push(line, "");
   }
   return `${lines.join("\n").replace(/\n+$/, "")}\n`;

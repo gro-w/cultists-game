@@ -1,5 +1,6 @@
 // DEV-TOOLS:START
 import { t } from "../core/i18n/index.js";
+import { prepareWindowValueGraph } from "./WindowValueGraph.js";
 import { createWindowEditorModel } from "./WindowEditorModel.js";
 import { renderWindowRoot } from "../core/WidgetLayoutRenderer.js";
 import { isBoundValue } from "../core/PropertyBinding.js";
@@ -283,15 +284,7 @@ export class WindowEditorView {
       graphButton.type = "button";
       graphButton.textContent = t("legacy.3079067d88f0");
       graphButton.title = t("legacy.039b8514593b");
-      graphButton.addEventListener("click", () => this.openValueBlueprintEditor({
-        blueprint: this.model.definition.valueGraph || {},
-        displayName: `${this.model.definition.id || "window"} ${t("legacy.f6cf556d44a8")}`,
-        onSaveToMemory: (blueprint) => {
-          this.model.definition.valueGraph = blueprint;
-          this.render();
-          this.onSaveToMemory(this.model.definition);
-        },
-      }));
+      graphButton.addEventListener("click", () => this._openValueBlueprintEditor());
       this.inspectorEl.append(graphButton);
     }
     const fields = this._fieldsFor(node);
@@ -365,16 +358,22 @@ export class WindowEditorView {
     graphButton.type = "button";
     graphButton.textContent = t("legacy.3079067d88f0");
     graphButton.title = t("legacy.039b8514593b");
-    graphButton.addEventListener("click", () => this.openValueBlueprintEditor({
-      blueprint: this.model.definition.valueGraph || {},
+    graphButton.addEventListener("click", () => this._openValueBlueprintEditor());
+    this.inspectorEl.append(graphButton);
+  }
+
+  _openValueBlueprintEditor() {
+    const prepared = prepareWindowValueGraph(this.model.definition);
+    this.openValueBlueprintEditor({
+      blueprint: prepared.blueprint,
       displayName: `${this.model.definition.id || "window"} ${t("legacy.f6cf556d44a8")}`,
       onSaveToMemory: (blueprint) => {
+        this.model.definition.root = prepared.root;
         this.model.definition.valueGraph = blueprint;
         this.render();
         this.onSaveToMemory(this.model.definition);
       },
-    }));
-    this.inspectorEl.append(graphButton);
+    });
   }
 
   _parseJsonField(text) {

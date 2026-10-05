@@ -11,6 +11,7 @@ export default {
     "i18n.manager.saved": "语言设置已应用",
     "i18n.manager.defaultLanguage": "默认语言",
     "node.getLanguage": "获取语言",
+    "node.valueReceiver": "数值接收",
     "node.setLanguage": "设置语言",
     "node.playBgm": "播放 BGM",
     "node.stopBgm": "停止 BGM",

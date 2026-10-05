@@ -430,7 +430,7 @@ export class ActivityEditorView {
       // (plan §6.2 value-port wiring); value ports get a distinct pin color
       // via the `data-port-kind="value"` CSS hook.
       const inputPorts = listActivityNodePorts(node.type, "input");
-      const outputPorts = listActivityNodePorts(node.type, "output");
+      const outputPorts = node.cl2Class === "valueReceiver" ? [] : listActivityNodePorts(node.type, "output");
       const portRows = Math.max(inputPorts.length, outputPorts.length);
       const isStart = node.id === this.model.startNodeId;
       const nodeClass = node.cl2Class || classifyActivityNodePorts(definition) || "unknown";
@@ -439,7 +439,7 @@ export class ActivityEditorView {
         el.className = "ng-editor-node";
         el.dataset.nodeId = node.id;
         el.innerHTML = `
-          <div class="ng-editor-node-header"><span class="ng-editor-node-title"></span></div>
+          <div class="ng-editor-node-header"><span class="ng-editor-node-title"></span><span class="ng-editor-node-start-icon" aria-hidden="true"></span></div>
           <div class="ng-editor-node-body"></div>
           <div class="ng-editor-port-layer inputs"></div>
           <div class="ng-editor-port-layer outputs"></div>
@@ -455,7 +455,8 @@ export class ActivityEditorView {
       el.classList.toggle("start", isStart);
       el.dataset.nodeClass = nodeClass;
       el.classList.toggle("value-receiver", nodeClass === "valueReceiver");
-      el.querySelector(".ng-editor-node-title").textContent = `${definition?.label || node.type}${isStart ? " 🏠" : ""}`;
+      el.querySelector(".ng-editor-node-title").textContent = definition?.label || node.type;
+      el.querySelector(".ng-editor-node-start-icon").textContent = isStart ? "🏠" : "";
       el.querySelector(".ng-editor-node-body").textContent = JSON.stringify(node.inputs || {});
       el.querySelector(".ng-editor-node-badge").textContent = node.type;
       const inputsLayer = el.querySelector(".ng-editor-port-layer.inputs");
@@ -632,6 +633,7 @@ export class ActivityEditorView {
   _listValueSources(targetPort) {
     const sources = [];
     for (const candidate of this.model.listNodes()) {
+      if (candidate.cl2Class === "valueReceiver") continue;
       for (const port of listActivityNodePorts(candidate.type, "output")) {
         if (port.kind === "value" && arePortsCompatible(port, targetPort)) sources.push({ nodeId: candidate.id, port: port.name });
       }

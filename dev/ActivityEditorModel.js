@@ -40,12 +40,16 @@ function isWireRef(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value) && "nodeId" in value);
 }
 
-export function createActivityEditorModel({ activityId, blueprint, displayName, valueOnly = false } = {}) {
-  let current = normalizeBlueprint(blueprint || {});
-  Object.values(current.nodes).forEach((node, index) => {
+function assignMissingNodePositions(blueprint) {
+  Object.values(blueprint.nodes || {}).forEach((node, index) => {
     if (!Number.isFinite(Number(node.x))) node.x = 80 + (index % 4) * 220;
     if (!Number.isFinite(Number(node.y))) node.y = 80 + Math.floor(index / 4) * 140;
   });
+  return blueprint;
+}
+
+export function createActivityEditorModel({ activityId, blueprint, displayName, valueOnly = false } = {}) {
+  let current = assignMissingNodePositions(normalizeBlueprint(blueprint || {}));
   let name = displayName || activityId || "untitled";
   const selection = new Set();
   const history = [];
@@ -179,6 +183,9 @@ export function createActivityEditorModel({ activityId, blueprint, displayName, 
     const fromNode = current.nodes[fromNodeId];
     const toNode = current.nodes[toNodeId];
     if (!fromNode || !toNode) return { ok: false, error: t("legacy.e27f1d70eab1") };
+    if (fromNode.cl2Class === "valueReceiver") {
+      return { ok: false, error: "A value receiver cannot be used as a value source" };
+    }
     const sourcePort = getActivityNodePort(fromNode.type, "output", fromPort);
     const targetPort = getActivityNodePort(toNode.type, "input", toPort);
     if (!sourcePort) return { ok: false, error: `${t("legacy.fa002d2c545a")}${fromNodeId} ${t("legacy.1a053b86935d")}${fromPort}` };
@@ -396,10 +403,18 @@ export function createActivityEditorModel({ activityId, blueprint, displayName, 
       } else if (nodeClass !== "value" && nodeClass !== "valueReceiver") {
         errors.push(`Value blueprint node ${node.id} is not a value node or value receiver`);
       }
+      if (nodeClass === "valueReceiver") {
+        for (const port of definition?.valueInputs || []) {
+          if (!Object.prototype.hasOwnProperty.call(node.inputs || {}, port.name)) {
+            errors.push(`${node.id} is missing receiver input ${port.name}`);
+          }
+        }
+      }
       for (const [port, value] of Object.entries(node.inputs || {})) {
         if (!isWireRef(value)) continue;
         const source = current.nodes[value.nodeId];
         if (!source) errors.push(`${node.id}.${port} references missing node ${value.nodeId}`);
+        else if (source.cl2Class === "valueReceiver") errors.push(`${node.id}.${port} references value receiver ${value.nodeId}, which has no output`);
         else if (!getActivityNodePort(source.type, "output", value.port || "value")) errors.push(`${node.id}.${port} references missing value output ${value.nodeId}.${value.port || "value"}`);
       }
     }
@@ -413,7 +428,7 @@ export function createActivityEditorModel({ activityId, blueprint, displayName, 
 
   function loadBlueprint(nextBlueprint) {
     pushHistory();
-    current = normalizeBlueprint(nextBlueprint);
+    current = assignMissingNodePositions(normalizeBlueprint(nextBlueprint));
     selection.clear();
   }
 

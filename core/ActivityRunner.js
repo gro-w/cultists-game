@@ -47,6 +47,9 @@ export function evaluateValueOutput(blueprint, nodeId, portName, variableStore, 
   const read = (name, fallback) => resolveInput(blueprint, node, name, variableStore, fallback, stack, pvGateway, dbGateway, runtimeGateway);
   let result;
   switch (node.type) {
+    case "valueReceiver":
+      result = read("value");
+      break;
     case "arithmetic":
       result = applyArithmetic(read("operator", "+"), read("left", 0), read("right", 0));
       break;

@@ -476,7 +476,7 @@ a1            → node03.condition
 | 流程节点 | 有 | 可有 | 可有 | 无 | `node: function(...)` |
 | 纯值节点 | 无 | 无 | 可有 | 有 | `reusablevalue name: function[...]` |
 | 流程起点 | 无 | 有 | 可有 | 无 | `node: flowStart(...)` |
-| 数值接收节点 | 无 | 无 | 有 | 无 | `inputvalue receiver: function[...]` |
+| 数值接收节点 | 无 | 无 | 有 | 无 | `inputvalue receiver: valueReceiver[expression[]]` |
 
 纯数值蓝图只包含纯值节点、数值接收节点和它们之间的数值连线。它服务于窗口组件属性、筛选条件等需要计算值的声明式区域，不是一个可独立调度的 Activity 流程。因此：
 
@@ -486,7 +486,7 @@ a1            → node03.condition
 - 不要为了满足 Activity 流程校验而伪造 `flowStart`、`default` 或 `end()`；这会把值图错误地变成流程图
 - 如果同一文件同时包含 Activity 流程，才按 Activity 流程规则要求唯一的 `flowStart`、可达终止节点和合法流程边
 
-数值接收节点没有数值输出，因此不能被 `reusablevalue` 引用；它只把一个纯值表达式绑定到自身声明的数值输入槽。使用 `inputvalue` 绑定其输入表达式：
+数值接收节点没有数值输出，因此不能被图内 `reusablevalue` 或其他数值节点引用；它通过唯一的 `value` 输入接收纯值表达式。窗口组件属性可以把接收节点 ID 作为图的外部结果读取，运行时会求值其 `value` 输入；该外部绑定不是图内数值输出。使用 `inputvalue` 声明接收节点：
 
 ```cl2
 inputvalue a1: math['gte', getlocalvar[1], 4];
@@ -497,11 +497,12 @@ inputvalue a1: math['gte', getlocalvar[1], 4];
 例如，下面是一个合法的纯数值蓝图片段：
 
 ```cl2
-reusablevalue hasEnoughSan: math['gte', getpubvar[5], 20];
-inputvalue visibleWhen: hasEnoughSan[];
+reusablevalue mental: getPublicVariable[5];
+reusablevalue hasEnoughSan: arithmetic[">=", mental[], 20];
+inputvalue visibleWhen: valueReceiver[hasEnoughSan[]];
 ```
 
-它只有一个可复用值和一个接收绑定，没有 `flowStart`、`default`、流程出口或 `end()`。`visibleWhen` 是接收节点的稳定 ID；它不是一个可被其他节点读取的值节点。
+它有两个可复用值和一个接收绑定，没有 `flowStart`、`default`、流程出口或 `end()`。`visibleWhen` 是接收节点的稳定 ID；窗口组件可把该 ID 作为外部属性值读取，但其他图节点不能将它作为数值来源。
 
 下面的写法不合法：
 
@@ -580,11 +581,13 @@ CL2 的循环语义仍是普通流程图回边，不会被改写成不可中断�
 
 ```cl2
 node01: showtext("test1"); /** @cl2.pos 0,0 */
+reusablevalue calc: arithmetic["+", 1, 2]; /** @cl2.pos 220,0 */
+inputvalue result: valueReceiver[calc[]]; /** @cl2.pos 440,0 */
 ```
 
 规则：
 
-- 有 `@cl2.pos` 时使用指定坐标
+- 流程节点、`reusablevalue` 和 `inputvalue` 声明均可附加 `@cl2.pos`，图形编辑器必须读写该坐标
 - 没有坐标时由编辑器自动布局
 - 自动布局结果不应在每次打开文件时自动写回
 - 布局元数据不能改变流程或数值语义

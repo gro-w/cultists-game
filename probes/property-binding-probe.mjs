@@ -34,6 +34,13 @@ import EventBus from "../core/EventBus.js";
   };
   assert.equal(isBoundValue({ nodeId: "halveSan" }), true);
   assert.equal(resolvePropertyValue({ nodeId: "halveSan" }, { valueGraph, variableStore }), 20);
+  valueGraph.nodes.halveSanReceiver = {
+    id: "halveSanReceiver",
+    type: "valueReceiver",
+    cl2Class: "valueReceiver",
+    inputs: { value: { nodeId: "halveSan", port: "value" } },
+  };
+  assert.equal(resolvePropertyValue({ nodeId: "halveSanReceiver" }, { valueGraph, variableStore }), 20);
 }
 
 // --- a bound value with no valueGraph/variableStore available falls back

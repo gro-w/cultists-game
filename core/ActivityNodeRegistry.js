@@ -212,6 +212,10 @@ const definitions = {
     valueInputs: [valueIn("operator", "string"), valueIn("left"), valueIn("right")],
     valueOutputs: [valueOut("value")],
   },
+  valueReceiver: {
+    label: t("node.valueReceiver"),
+    valueInputs: [valueIn("value")],
+  },
   // Ternary value selection (no domain meaning, same "engine stays generic"
   // spirit as `arithmetic`/`branch`): picks `whenTrue`/`whenFalse` based on
   // `condition`, letting a value-graph express e.g. "pick the

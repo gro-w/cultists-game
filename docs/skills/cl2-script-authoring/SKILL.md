@@ -41,7 +41,7 @@ metadata:
 - `reusablevalue name: expression;` 定义纯值子图，引用写成 `name[]`；纯值不得推进时间、修改变量、打开窗口、触发事件或写存档。
 - CL2 节点按引脚分为流程节点、纯值节点、流程起点和数值接收节点；不要根据函数名称猜类别，先读注册表的 `flowInputs`、`flowOutputs`、`valueInputs` 和 `valueOutputs`。
 - 纯数值蓝图只验证纯值节点、数值接收节点及数值连线，不要求 `flowStart`、流程出口、流程边或 `activityEnd`；不要伪造流程节点来通过 Activity 校验。
-- 第四类数值接收节点用 `inputvalue receiver_id: expression;`，它是输入绑定，不是流程边、纯值输出或可调度节点；解析和回写时必须保留 `valueReceiver` 分类。
+- 第四类数值接收节点使用 `inputvalue receiver_id: valueReceiver[expression[]];`，它是无输出终端，不是流程边、可复用纯值或可调度节点；解析和回写时必须保留 `valueReceiver` 分类及上游数值边。旧式 `inputvalue receiver_id: pureFunction[...]` 必须规范化为纯值节点加 receiver 包装。
 - 循环使用普通流程回边，通常由 `if` 的 true 分支进入循环体、循环体回到条件节点；必须存在可达退出路径。
 - 布局写成 `/** @cl2.pos x,y */`；布局和 Note 不改变运行时语义。
 - 稳定 ID 不得由翻译文本、显示名称、患者姓名或语言目录生成。
@@ -62,7 +62,7 @@ metadata:
 
 ### 4. 处理值图
 
-需要复用的纯值表达式先定义为 `reusablevalue`，再在流程节点或数值接收节点中用 `name[]` 引用。检查类型、前向引用和循环依赖。遇到数值接收节点时保留 `inputvalue` 的接收节点 ID 和输入槽语义，不能改写成普通流程节点或 `reusablevalue`；接收节点没有数值输出，不能作为其他表达式的值来源。
+需要复用的纯值表达式先定义为 `reusablevalue`，再在流程节点或数值接收节点中用 `name[]` 引用。检查类型、前向引用和循环依赖。遇到数值接收节点时保留 `inputvalue` 的接收节点 ID 和 `value` 输入边，不能改写成普通流程节点或 `reusablevalue`；接收节点没有数值输出，不能作为其他图节点的值来源。窗口组件属性可把 receiver ID 作为图外结果读取。
 
 ### 5. 修改文件
 

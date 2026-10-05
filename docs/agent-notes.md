@@ -143,7 +143,8 @@ node tools/verify-publish.js
 - `dorm-bottom` 室友对话显示会路由到 `ending-screen`，对话窗口关闭；Activity 完成后由结局窗口自己的“继续”按钮关闭会话。`ending-screen` 声明 `dorm-bottom` 接收别名以接收 Activity 完成和 reset 事件。
 - Activity 编辑器工具栏提供“CL2 脚本编辑器/蓝图编辑器”切换；图形模式导出当前草稿为 CL2，源码模式切回图形模式前执行解析和完整验证，失败时保留源码和原图形草稿。
 - 启动时 `gameTimeMinutes` 公共变量在注册 `GameClock` 同步源后立即同步；否则患者队列管理器在第 1 天 08:00 会读取默认零值并停在首个 `blockUntil`，HIS 的 `hisPatients` 集合为空。
-- 窗口组件数值蓝图的 `inputvalue` 节点在 CL2 解析后保留 `cl2Class: "valueReceiver"`，编辑器以独立样式显示，序列化时继续输出 `inputvalue`，避免源码/蓝图切换改变节点类别。
+- 窗口组件数值蓝图会为绑定到组件属性的每个图输出生成无输出的 `valueReceiver` 终端；CL2 `inputvalue` 在源码/图形往返时保留接收节点及全部数值边，运行时由接收节点读取其输入值。`reusablevalue`、`inputvalue` 和流程声明均写入并读取 `@cl2.pos`；旧源码缺少坐标时，ActivityEditorModel 在加载时补齐，以免 SVG 连线路径因 `undefined` 坐标变为 `NaN`。旧式 `inputvalue receiver: arithmetic[...]` 会归一为纯值表达式加接收包装节点。
+- Activity 蓝图节点样式依类别区分：流程节点蓝色、流程起点蓝色并显示 Home 图标、纯值节点绿色、数值接收节点紫色。
 - `blockUntil(condition)` 的单参数布尔 CL2 形式固定绑定 `condition`，不能落到兼容性的 `equals` 输入；这保证启动患者队列管理器在 08:00 立即插入首批患者。纯数值编辑器使用独立验证，不要求流程起点和终点。
 - 普通 `dialogue` 窗口的主接收目标是 `his-app`，只保留 `default` 别名且不创建结局立绘占位 DOM；`dorm-bottom` 由引擎路由到全屏 `ending-screen`，避免室友对白同时落入普通对话框。
 - 开发人员模式的窗口调试器位于下方运行时调试器区域，与 Activity、存档、公共变量和时间调试器并列；窗口定义编辑器仍位于上方数据编辑区域。

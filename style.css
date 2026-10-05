@@ -1540,12 +1540,17 @@ input[type="range"] {
   box-shadow: 0 0 0 2px #000080;
 }
 
-.ng-editor-node.value-receiver .ng-editor-node-header {
+.ng-editor-node[data-node-class="value"] .ng-editor-node-header {
+  background: #177a32;
+}
+
+.ng-editor-node[data-node-class="valueReceiver"] .ng-editor-node-header {
   background: #6b2b6b;
 }
 
-.ng-editor-node.start {
-  border-color: #cc6600;
+.ng-editor-node[data-node-class="flow"] .ng-editor-node-header,
+.ng-editor-node[data-node-class="flowStart"] .ng-editor-node-header {
+  background: #000080;
 }
 
 .ng-editor-node-header {
@@ -1557,6 +1562,12 @@ input[type="range"] {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.ng-editor-node-start-icon {
+  min-width: 15px;
+  text-align: right;
+  font-size: 12px;
 }
 
 .ng-editor-node-body {

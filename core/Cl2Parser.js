@@ -14,6 +14,12 @@ function diagnostic(source, offset, message, code = "CL2_SYNTAX") {
   const position = lineColumn(source, offset);
   return { code, message, line: position.line, column: position.column };
 }
+function trailingPosition(source, offset) {
+  const lineEnd = source.indexOf("\n", offset);
+  const tail = source.slice(offset, lineEnd < 0 ? source.length : lineEnd);
+  const match = tail.match(/@cl2\.pos\s+(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+  return match ? { x: Number(match[1]), y: Number(match[2]) } : null;
+}
 
 class Cursor {
   constructor(source) { this.source = source; this.index = 0; }
@@ -226,7 +232,7 @@ export function parseCl2(source, { sourcePath = "<inline>", validate = true } = 
       cursor.expect(":", diagnostics);
       const fn = parseFunction(cursor, diagnostics, true);
       cursor.expect(";", diagnostics);
-      (keyword === "reusablevalue" ? reusableEntries : inputValues).push({ id, fn, start });
+      (keyword === "reusablevalue" ? reusableEntries : inputValues).push({ id, fn, start, position: trailingPosition(text, cursor.index) });
       continue;
     }
     const id = keyword;
@@ -235,15 +241,14 @@ export function parseCl2(source, { sourcePath = "<inline>", validate = true } = 
     const fn = parseFunction(cursor, diagnostics, false);
     const body = cursor.peek("{") ? cursor.balanced("{", "}", diagnostics) : null;
     cursor.expect(";", diagnostics);
-    const tail = text.slice(cursor.index, text.indexOf("\n", cursor.index) < 0 ? text.length : text.indexOf("\n", cursor.index));
-    const position = tail.match(/@cl2\.pos\s+(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+    const position = trailingPosition(text, cursor.index);
     const edges = [];
     if (body != null) {
       const edgePattern = /(option<[^>]+>|default)\s+([A-Za-z_][A-Za-z0-9_.:-]*)\s*;/g;
       let match;
       while ((match = edgePattern.exec(body))) edges.push({ label: match[1], target: match[2] });
     }
-    flowEntries.push({ id, fn, edges, position: position ? { x: Number(position[1]), y: Number(position[2]) } : null, start });
+    flowEntries.push({ id, fn, edges, position, start });
   }
 
   const reusable = {};
@@ -253,6 +258,7 @@ export function parseCl2(source, { sourcePath = "<inline>", validate = true } = 
     const type = functionNameToType(entry.fn?.name || "");
     const node = { id: entry.id, type, inputs: {}, next: {} };
     node.inputs = makeInputs(type, (entry.fn?.args || []).map((value) => resolveValue(value, reusable)), reusable);
+    if (entry.position) Object.assign(node, entry.position);
     valueNodes[entry.id] = node;
     reusable[entry.id] = { nodeId: entry.id, port: "value", outputType: getActivityNodeDefinition(type)?.valueOutputs?.[0]?.type || "any" };
   }
@@ -265,15 +271,47 @@ export function parseCl2(source, { sourcePath = "<inline>", validate = true } = 
     nodes[entry.id] = node;
   }
   for (const entry of inputValues) {
-    let target = nodes[entry.id];
-    if (!target) {
-      target = { id: entry.id, type: functionNameToType(entry.fn?.name || ""), inputs: {}, next: {}, cl2Class: "valueReceiver" };
-      nodes[entry.id] = target;
-    } else {
-      target.cl2Class = "valueReceiver";
-    }
+    const functionType = functionNameToType(entry.fn?.name || "");
+    const definition = getActivityNodeDefinition(functionType);
     const args = (entry.fn?.args || []).map((value) => resolveValue(value, reusable));
-    Object.assign(target.inputs, makeInputs(target.type, args, reusable));
+    if (definition?.valueInputs?.length && !definition?.valueOutputs?.length && !definition?.flowInputs?.length && !definition?.flowOutputs?.length) {
+      nodes[entry.id] = { id: entry.id, type: functionType, inputs: makeInputs(functionType, args, reusable), next: {}, cl2Class: "valueReceiver", ...(entry.position || {}) };
+      continue;
+    }
+    const reference = reusable[functionType] || reusable[`${functionType}__value`];
+    if (reference) {
+      nodes[entry.id] = {
+        id: entry.id,
+        type: "valueReceiver",
+        inputs: { value: { nodeId: reference.nodeId, port: reference.port || "value" } },
+        next: {},
+        cl2Class: "valueReceiver",
+        ...(entry.position || {}),
+      };
+      continue;
+    }
+    if (!definition?.valueOutputs?.length || definition.flowInputs?.length || definition.flowOutputs?.length) {
+      diagnostics.push(diagnostic(text, entry.start, `inputvalue expression "${functionType}" is not a pure value expression`, "CL2_VALUE_RECEIVER"));
+      continue;
+    }
+    let expressionId = `${entry.id}__value`;
+    let suffix = 2;
+    while (nodes[expressionId] || valueNodes[expressionId] || flowEntries.some((flow) => flow.id === expressionId) || inputValues.some((receiver) => receiver.id === expressionId)) expressionId = `${entry.id}__value${suffix++}`;
+    nodes[expressionId] = {
+      id: expressionId,
+      type: functionType,
+      inputs: makeInputs(functionType, args, reusable),
+      next: {},
+      ...(entry.position ? { x: entry.position.x - 220, y: entry.position.y } : {}),
+    };
+    nodes[entry.id] = {
+      id: entry.id,
+      type: "valueReceiver",
+      inputs: { value: { nodeId: expressionId, port: definition.valueOutputs[0]?.name || "value" } },
+      next: {},
+      cl2Class: "valueReceiver",
+      ...(entry.position || {}),
+    };
   }
   const flowIds = flowEntries.map((entry) => entry.id);
   flowEntries.forEach((entry, index) => {

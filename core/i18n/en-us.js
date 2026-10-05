@@ -11,6 +11,7 @@ export default {
     "i18n.manager.saved": "Language settings applied",
     "i18n.manager.defaultLanguage": "Default language",
     "node.getLanguage": "Get language",
+    "node.valueReceiver": "Value receiver",
     "node.setLanguage": "Set language",
     "node.playBgm": "Play BGM",
     "node.stopBgm": "Stop BGM",
