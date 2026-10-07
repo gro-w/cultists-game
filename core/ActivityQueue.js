@@ -17,7 +17,7 @@ export class ActivityQueue {
   }
 
   /** Append a new instance for `activityId` and return the created instance. */
-  append({ activityId, instanceId, currentNodeId, payload = null, receivedDay = null, receivedTime = null, receivedPhase = null } = {}) {
+  append({ activityId, instanceId, currentNodeId, payload = null, parameters = [], receivedDay = null, receivedTime = null, receivedPhase = null } = {}) {
     if (!activityId) throw new Error(t("error.37554c5966cc"));
     const sequence = (this._sequence.get(activityId) || 0) + 1;
     this._sequence.set(activityId, sequence);
@@ -27,6 +27,7 @@ export class ActivityQueue {
       queueId: this.queueId,
       currentNodeId,
       payload,
+      parameters,
       receivedDay,
       receivedTime,
       receivedPhase,
@@ -108,6 +109,7 @@ export class ActivityQueue {
       }
       seen.add(entry.instanceId);
       const restored = cloneActivityInstance(entry);
+      restored.parameters = Array.isArray(restored.parameters) ? restored.parameters : [];
       restored.executedNodeIds = Array.isArray(restored.executedNodeIds) ? restored.executedNodeIds : [];
       restored.executionTrace = Array.isArray(restored.executionTrace) ? restored.executionTrace : [];
       restored.executionStep = Math.max(

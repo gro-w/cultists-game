@@ -28,6 +28,9 @@ export class WindowFrame {
     this._unsubscribers = [];
     this._rootRefreshScheduled = false;
     this._disposed = false;
+    rendererCtx.widgetInstances ||= new Map();
+    rendererCtx.windowInstanceId = state.instanceId;
+    rendererCtx.windowManager = windowManager;
     this._drag = new PointerInteraction();
     this._resize = new PointerInteraction();
     this._root = root;
@@ -337,6 +340,8 @@ export class WindowFrame {
     this._resize.cancel();
     this._unsubscribers.forEach((unsubscribe) => unsubscribe());
     this._unsubscribers = [];
+    for (const instance of this._rendererCtx.widgetInstances?.values?.() || []) instance.dispose?.();
+    this._rendererCtx.widgetInstances?.clear?.();
     document.removeEventListener("click", this._onOutsideClick);
     this.el.remove();
   }

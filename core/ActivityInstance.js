@@ -5,7 +5,7 @@
  * module just owns the instance's field defaults so every queue produces
  * consistent, snapshot-safe instances.
  */
-export function createActivityInstance({ instanceId, activityId, queueId, currentNodeId = null, payload = null, receivedDay = null, receivedTime = null, receivedPhase = null, localVariables = {} }) {
+export function createActivityInstance({ instanceId, activityId, queueId, currentNodeId = null, payload = null, parameters = [], receivedDay = null, receivedTime = null, receivedPhase = null, localVariables = {} }) {
   return {
     instanceId,
     activityId,
@@ -22,6 +22,7 @@ export function createActivityInstance({ instanceId, activityId, queueId, curren
     pausedAtBreakpointId: null,
     localVariables: structuredClone(localVariables || {}),
     payload,
+    parameters: structuredClone(Array.isArray(parameters) ? parameters : []),
     receivedDay,
     receivedTime,
     receivedPhase,

@@ -18,6 +18,7 @@ import { StartMenuEditorView } from "./StartMenuEditorView.js";
 import { SaveDebuggerView } from "./SaveDebuggerView.js";
 import { BlueprintNodeManagerView } from "./BlueprintNodeManagerView.js";
 import { DataJsonEditorView } from "./DataJsonEditorView.js";
+import { AppProgramManagerView } from "./AppProgramManagerView.js";
 import { TimeDebuggerView } from "./TimeDebuggerView.js";
 import { I18nManagerView } from "./I18nManagerView.js";
 import { WindowDebuggerView } from "./WindowDebuggerView.js";
@@ -40,6 +41,7 @@ const START_MENU_EDITOR_WINDOW_ID = "dev-start-menu-editor";
 const SAVE_DEBUGGER_WINDOW_ID = "dev-save-debugger";
 const BLUEPRINT_NODE_MANAGER_WINDOW_ID = "dev-blueprint-node-manager";
 const DATA_JSON_EDITOR_WINDOW_ID = "dev-data-json-editor";
+const APP_PROGRAM_MANAGER_WINDOW_ID = "dev-app-program-manager";
 const TIME_DEBUGGER_WINDOW_ID = "dev-time-debugger";
 const I18N_MANAGER_WINDOW_ID = "dev-i18n-manager";
 const WINDOW_DEBUGGER_WINDOW_ID = "dev-window-debugger";
@@ -73,6 +75,7 @@ export async function initDeveloperMode({
   dbGateway,
   runtimeGateway,
   iconManager,
+  appRegistry,
   dataStructureManager,
   dataStore,
   publicVariableManager,
@@ -470,6 +473,18 @@ export async function initDeveloperMode({
     body: dataJsonEditorView.el,
   });
 
+  const appProgramManagerView = new AppProgramManagerView({ appRegistry, dataLoader, windowDefinitionStore, activityDefinitionStore });
+  windowDefinitionStore.register({
+    id: APP_PROGRAM_MANAGER_WINDOW_ID,
+    title: t("appManager.title"),
+    icon: "🧩",
+    width: 840,
+    height: 620,
+    resizable: true,
+    singleInstance: true,
+    body: appProgramManagerView.el,
+  });
+
 
   // Single desktop-icon entry point (plan follow-up: "把桌面上各个开发人员
   // 模式图标放在同一个开发人员模式app里面") - every dev sub-tool above is
@@ -486,6 +501,7 @@ export async function initDeveloperMode({
       <button type="button" class="ng-dev-desktop-icon" data-tool="list-manager"><span class="ng-dev-icon-glyph">🛠</span><span>Activity ${t("legacy.35bd37ad3381")}</span></button>
       <button type="button" class="ng-dev-desktop-icon" data-tool="window-manager"><span class="ng-dev-icon-glyph">🪟</span><span>${t("legacy.3b195364abf4")}</span></button>
       <button type="button" class="ng-dev-desktop-icon" data-tool="icon-editor"><span class="ng-dev-icon-glyph">🖱</span><span>${t("legacy.f670ba061ea9")}</span></button>
+      <button type="button" class="ng-dev-desktop-icon" data-tool="app-program-manager"><span class="ng-dev-icon-glyph">🧩</span><span>${t("appManager.title")}</span></button>
       <button type="button" class="ng-dev-desktop-icon" data-tool="structure-manager"><span class="ng-dev-icon-glyph">🧱</span><span>${t("legacy.aee22ce678c6")}</span></button>
       <button type="button" class="ng-dev-desktop-icon" data-tool="database-debugger"><span class="ng-dev-icon-glyph">🗄</span><span>${t("legacy.df85571b280e")}</span></button>
       <button type="button" class="ng-dev-desktop-icon" data-tool="public-variable-manager"><span class="ng-dev-icon-glyph">🌐</span><span>${t("legacy.122d971cae32")}</span></button>
@@ -521,6 +537,9 @@ export async function initDeveloperMode({
   });
   launcherEl.querySelector('[data-tool="icon-editor"]').addEventListener("click", () => {
     windowManager.open(windowDefinitionStore.get(ICON_EDITOR_WINDOW_ID));
+  });
+  launcherEl.querySelector('[data-tool="app-program-manager"]').addEventListener("click", () => {
+    windowManager.open(windowDefinitionStore.get(APP_PROGRAM_MANAGER_WINDOW_ID));
   });
   launcherEl.querySelector('[data-tool="structure-manager"]').addEventListener("click", () => {
     windowManager.open(windowDefinitionStore.get(STRUCTURE_MANAGER_WINDOW_ID));
@@ -587,6 +606,7 @@ export async function initDeveloperMode({
     openOnboardingEditor: () => windowManager.open(windowDefinitionStore.get(ONBOARDING_EDITOR_WINDOW_ID)),
     openBlueprintNodeManager: () => windowManager.open(windowDefinitionStore.get(BLUEPRINT_NODE_MANAGER_WINDOW_ID)),
     openDataJsonEditor: () => windowManager.open(windowDefinitionStore.get(DATA_JSON_EDITOR_WINDOW_ID)),
+    openAppProgramManager: () => windowManager.open(windowDefinitionStore.get(APP_PROGRAM_MANAGER_WINDOW_ID)),
     openTimeDebugger: () => windowManager.open(windowDefinitionStore.get(TIME_DEBUGGER_WINDOW_ID)),
     openI18nManager: () => windowManager.open(windowDefinitionStore.get(I18N_MANAGER_WINDOW_ID)),
 

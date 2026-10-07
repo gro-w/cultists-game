@@ -57,7 +57,7 @@ function collectWaitDependencies(blueprint) {
             const prefix = dependencyNode.type === "getActivityInstanceCount" ? "__activityCount:" : "__scheduleCount:";
             dependencies.variableKeys.add(`${prefix}${countId}`);
           } else dependencies.wildcard = true;
-        } else if (!["valueReceiver", "arithmetic", "conditionalValue", "getProperty"].includes(dependencyNode.type)) {
+        } else if (!["valueReceiver", "arithmetic", "conditionalValue", "getProperty", "getParameter"].includes(dependencyNode.type)) {
           // Unknown, gateway-backed, local, or custom values may change through
           // runtime events that cannot be safely narrowed at compile time.
           dependencies.wildcard = true;

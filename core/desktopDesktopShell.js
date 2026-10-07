@@ -3,6 +3,7 @@ import { Taskbar } from "./desktopTaskbar.js";
 import { renderDesktopIcons } from "./desktopDesktopIcon.js";
 import { GAME_CLOCK_EVENTS } from "./GameClock.js";
 import { resolvePropertyValue } from "./PropertyBinding.js";
+import { showVirtualFileContextMenu } from "./VirtualFileWidgets.js";
 
 
 /**
@@ -61,6 +62,7 @@ export class DesktopShell {
       <div class="taskbar"></div>
     `;
     this.iconsEl = this.rootEl.querySelector(".desktop-icons");
+    this.desktopEl = this.rootEl.querySelector(".desktop");
     this.windowLayerEl = this.rootEl.querySelector(".window-layer");
     this.taskbar = new Taskbar(this.windowManager, this.eventBus, this.rootEl.querySelector(".taskbar"));
   }
@@ -82,6 +84,19 @@ export class DesktopShell {
   }
 
   _bindEvents() {
+    this.eventBus.on("vfs:changed", () => this.refreshIcons());
+    this.eventBus.on("app-programs:changed", () => this.refreshIcons());
+    this.desktopEl.addEventListener("contextmenu", (event) => {
+      if (event.target.closest(".ng-window")) return;
+      const iconEl = event.target.closest(".desktop-icon");
+      showVirtualFileContextMenu(event, {
+        virtualFileSystem: this.iconManager?.virtualFileSystem,
+        path: iconEl?.dataset.iconId || null,
+        directory: "/home/desktop",
+        openPath: (path) => this.openVirtualPath?.(path),
+        refresh: () => this.refreshIcons(),
+      });
+    });
     this.eventBus.on("window:opened", ({ instanceId }) => {
       this._mountFrame(instanceId);
       this._updateFullscreenVisibility();
@@ -119,7 +134,8 @@ export class DesktopShell {
     // Keep the Start menu in lockstep with reorder/label/icon edits made by
     // the same DesktopIconManager; it must not maintain a second app list.
     const icons = this.iconManager.list({ includeEngineOwned: true });
-    this.taskbar.setApps(icons, (icon) => this.runIconBlueprint?.(icon));
+    const menuApps = this.iconManager.listDirectory?.("/home/menu") || icons;
+    this.taskbar.setApps(menuApps, (icon) => this.runIconBlueprint?.(icon));
     renderDesktopIcons(this.iconsEl, icons, {
       onActivate: (icon) => this.runIconBlueprint?.(icon),
       onReorder: (iconId, newOrder) => {
@@ -274,6 +290,11 @@ export class DesktopShell {
       valueGraph: definition?.valueGraph,
       conditionContext: this.conditionContext,
       onEvent: (node, eventName, value) => this.runWidgetEvent?.(state.windowId, node.widgetId, eventName, value),
+      customWidgetFactories: this.customWidgetFactories,
+      windowInstanceId: state.instanceId,
+      ownerWindowInstanceId: state.instanceId,
+      openWindow: (windowId) => this.openWindow(windowId),
+      openVirtualPath: (path, sourceInstanceId) => this.openVirtualPath?.(path, sourceInstanceId),
     };
     // Match the last working NG implementation: the generic dialogue window
     // owns one persistent dialogue surface as its body. Rendering it through

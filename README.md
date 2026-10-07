@@ -10,6 +10,9 @@
 - CL2（Cultists Blueprint & Script Language 2）统一脚本图语言：Activity 加载时校验并按节点生成 JavaScript 操作与纯值表达式，静态流程目标和可确定常量在编译时优化；JIT 同时增量构建源码行映射，避免大型蓝图重复扫描源码前缀；`.CL2.txt` 仍是唯一 canonical 源码，执行器保留等待、检查点、保存与恢复能力
 
 - Windows 95 风格桌面、任务栏、开始菜单、窗口和数据驱动应用
+- 存档内持久化的虚拟文件系统、无原生按钮阴影的桌面/文件管理器、可多开的文档编辑器和 CMD 外观的 POSIX shell 终端
+- 终端视觉采用黑底、灰色凹入边框和等宽文字模拟 cmd，命令仍为 Linux/POSIX shell，不支持 Windows 命令或盘符路径；内建 `cd`、`pwd`、`which`、`export`，默认 `PATH=/usr/bin:/opt`。虚拟路径既可使用 `/opt/his`，也可通过 PATH 名称启动应用。`sh` 支持嵌套 shell、`sh /path/to/script.sh` 和 `sh -c command`，并实现 if/case/for/while 等常用 POSIX 脚本结构。
+- Activity 可接收并持久化参数；应用程序管理器为 Activity 目标编辑 JSON 参数数组，启动该应用时传入配置参数，终端命令行参数追加在其后。蓝图可通过“获取 Activity 参数”节点按从 0 开始的索引读取；`runActivity` 与 `insertActivity` 节点均可传参
 - 医院工作与宿舍生活两种场景，以及工作、社交、管理器和主活动队列
 - 确定性的游戏时钟：普通行动默认推进 20 分钟，睡眠和跨日按明确边界结算
 - 患者诊疗、技能检定、SAN 变化、物品调查、法术、关键词笔记本和多种结局
@@ -87,13 +90,13 @@ probes/                    确定性探针
 media/                     历史宣传资源和设计稿
 ```
 
-`data/` 中的 canonical 内容由 `data/game-manifest.json` 配置；旧版 `data/game-content/` 已完成迁移并从仓库删除。Activity 定义位于 `data/activities/`，窗口定义位于 `data/windows/`，数据库位于 `data/databases/`；本地变量命名定义位于 `data/local-variables.framework.json`，值只存在于各 Activity 实例。
+`data/` 中的 canonical 内容由 `data/game-manifest.json` 配置；旧版 `data/game-content/` 已完成迁移并从仓库删除。Activity 定义位于 `data/activities/`，窗口定义位于 `data/windows/`，数据库位于 `data/databases/`；本地变量命名定义位于 `data/local-variables.framework.json`，值只存在于各 Activity 实例。虚拟文档支持多个独立窗口；“另存为”通过文件选择器选择目标，并在覆盖已有文件前请求确认。桌面图标和文件管理器条目使用可键盘操作的非原生按钮控件，避免浏览器按钮阴影；虚拟终端恢复 Linux 风格的 `/cwd>` 提示符和 POSIX 路径，并保留原有虚拟 shell 命令。
 
 ## 三层引擎
 
 | 层 | 作用 |
 | --- | --- |
-| `core` | 提供与具体游戏无关的桌面、窗口、Activity 执行、数据加载、基础变量、事件、存档和受控能力 |
+| `core` | 提供与具体游戏无关的桌面、窗口、Activity 执行、数据加载、基础变量、事件、虚拟文件系统/存档和受控能力 |
 | `framework` | 使用 CL2 和数据实现工作时间、`phase`、`duty`、`location`、工作状态机、队列、资源、变量、Widget 与 UI 预制系统 |
 | `game` | 使用 CL2 和数据实现本作的医院、患者、宿舍、社交、物品、成就、剧情和结局 |
 
@@ -109,7 +112,7 @@ media/                     历史宣传资源和设计稿
 - `data/activity-lists/`：按用途组织 Activity 的清单
 - `data/game-manifest.json`：内容包、初始状态、队列和入口配置
 
-编辑器写入 canonical 数据，存档调试器只修改存档和运行时状态。运行时集合可以通过数据定义中的 `stateAliases` 兼容旧稳定 ID，恢复时 canonical ID 优先；也可以通过 `activityQueueId` 把 Activity 队列投影给 CL2 窗口列表，队列变化会自动触发窗口刷新。集合还支持声明式派生字段、数据库 lookup、前置占位选项和 canonical 收集状态复用；ChatGTP 窗口按来源、类别、关键词三行筛选，类别为“不选择”时跳过类别过滤。Activity 对话 transcript 支持只读回放，不会重新执行剧情节点；开发 Activity 调试器提供结局 Activity 触发入口，仍通过正常 `runActivity` API 执行。社交媒体窗口尺寸和标签栏布局与 main 分支旧应用保持一致。新增内容应优先使用 CL2 和数据，不要把业务逻辑写进 JavaScript。
+编辑器写入 canonical 数据，存档调试器只修改存档和运行时状态。`data/virtual-filesystem.json` 保存初始文件树，`data/app-definitions.json` 保存程序 ID、图标和目标；无扩展名程序文件只包含稳定程序 ID，`.lnk` 只包含目标路径，图标由应用程序管理器提供。桌面 `/home/desktop`、开始菜单 `/home/menu`、程序目录 `/opt` 和垃圾桶 `/trash` 均属于存档中的 VFS。开发人员模式程序和快捷方式不在任何 `data/` 文件中，仅在精确 `?dev` 启动时由 core 注入；普通模式恢复会过滤 core 专属文件、指向它们的快捷方式及 `dev-*` 窗口。核心程序文件不可复制、移动、改名、写入或删除，其桌面位置可持久化。全部 JSON 数据编辑器对 VFS 默认值执行 schema 校验，并区分保存到内存、下载和写盘；存档调试器只处理运行时存档。运行时集合可以通过数据定义中的 `stateAliases` 兼容旧稳定 ID，恢复时 canonical ID 优先；也可以通过 `activityQueueId` 把 Activity 队列投影给 CL2 窗口列表，队列变化会自动触发窗口刷新。集合还支持声明式派生字段、数据库 lookup、前置占位选项和 canonical 收集状态复用；ChatGTP 窗口按来源、类别、关键词三行筛选，类别为“不选择”时跳过类别过滤。Activity 对话 transcript 支持只读回放，不会重新执行剧情节点；开发 Activity 调试器提供结局 Activity 触发入口，仍通过正常 `runActivity` API 执行。社交媒体窗口尺寸和标签栏布局与 main 分支旧应用保持一致。新增内容应优先使用 CL2 和数据，不要把业务逻辑写进 JavaScript。
 
 ChatGTP QA 与 Turtle Soup 的运行时数据分别由 `data/databases/chatgtpQaEntries.json` 和 `data/databases/turtleSoupPuzzles.json` 唯一持有；manifest 和探针不得重新引入已删除的重复 seed/native 文件。
 

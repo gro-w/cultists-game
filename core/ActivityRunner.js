@@ -32,13 +32,13 @@ const MAX_STEPS = 1000;
  * checks. Activity execution compiles value graphs into JavaScript expressions
  * and does not call this recursive resolver.
  */
-export function evaluateValueOutput(blueprint, nodeId, portName, variableStore, stack, pvGateway = null, dbGateway = null, runtimeGateway = null) {
+export function evaluateValueOutput(blueprint, nodeId, portName, variableStore, stack, pvGateway = null, dbGateway = null, runtimeGateway = null, instance = null) {
   const key = `${nodeId}:${portName}`;
   if (stack.has(key)) throw new Error(`Circular value dependency at ${key}`);
   const node = blueprint.nodes[nodeId];
   if (!node) throw new Error(`Unknown value node: ${nodeId}`);
   stack.add(key);
-  const read = (name, fallback) => resolveInput(blueprint, node, name, variableStore, fallback, stack, pvGateway, dbGateway, runtimeGateway);
+  const read = (name, fallback) => resolveInput(blueprint, node, name, variableStore, fallback, stack, pvGateway, dbGateway, runtimeGateway, instance);
   let result;
   switch (node.type) {
     case "valueReceiver":
@@ -102,6 +102,9 @@ export function evaluateValueOutput(blueprint, nodeId, portName, variableStore, 
       result = [...(Array.isArray(array) ? array : []), read("item")];
       break;
     }
+    case "getParameter":
+      { const index = Number(read("id")); result = Number.isInteger(index) && index >= 0 ? instance?.parameters?.[index] : undefined; }
+      break;
     case "getGameTime":
       result = variableStore.get("__gameTime") ?? 0;
       break;
@@ -144,7 +147,7 @@ export function evaluateValueOutput(blueprint, nodeId, portName, variableStore, 
         if (Array.isArray(value)) return value.map(replaceParameters);
         if (!value || typeof value !== "object") return value;
         if (Object.keys(value).length === 1 && typeof value.parameter === "string") {
-          return resolveInput(blueprint, node, value.parameter, variableStore, undefined, stack, pvGateway, dbGateway, runtimeGateway);
+          return resolveInput(blueprint, node, value.parameter, variableStore, undefined, stack, pvGateway, dbGateway, runtimeGateway, instance);
         }
         return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, replaceParameters(child)]));
       };
@@ -161,6 +164,7 @@ export function evaluateValueOutput(blueprint, nodeId, portName, variableStore, 
         pvGateway,
         dbGateway,
         runtimeGateway,
+        instance,
       );
       break;
     }
@@ -209,13 +213,13 @@ function applyArithmetic(operator, left, right) {
  * anywhere inside are returned unchanged (safe superset of the old
  * top-level-only behavior).
  */
-function resolveDeep(blueprint, value, variableStore, stack, pvGateway, dbGateway, runtimeGateway) {
-  if (Array.isArray(value)) return value.map((item) => resolveDeep(blueprint, item, variableStore, stack, pvGateway, dbGateway, runtimeGateway));
+function resolveDeep(blueprint, value, variableStore, stack, pvGateway, dbGateway, runtimeGateway, instance) {
+  if (Array.isArray(value)) return value.map((item) => resolveDeep(blueprint, item, variableStore, stack, pvGateway, dbGateway, runtimeGateway, instance));
   if (value && typeof value === "object") {
-    if ("nodeId" in value) return evaluateValueOutput(blueprint, value.nodeId, value.port || "value", variableStore, stack, pvGateway, dbGateway, runtimeGateway);
+    if ("nodeId" in value) return evaluateValueOutput(blueprint, value.nodeId, value.port || "value", variableStore, stack, pvGateway, dbGateway, runtimeGateway, instance);
     if ("variable" in value) return variableStore.get(value.variable);
     const out = {};
-    for (const [key, child] of Object.entries(value)) out[key] = resolveDeep(blueprint, child, variableStore, stack, pvGateway, dbGateway, runtimeGateway);
+    for (const [key, child] of Object.entries(value)) out[key] = resolveDeep(blueprint, child, variableStore, stack, pvGateway, dbGateway, runtimeGateway, instance);
     return out;
   }
   return value;
@@ -230,10 +234,10 @@ function resolveDeep(blueprint, value, variableStore, stack, pvGateway, dbGatewa
  * literals so any wire-refs nested inside them (e.g. `createRecord`'s
  * `data` fields) resolve too.
  */
-export function resolveInput(blueprint, node, name, variableStore, fallback, stack = new Set(), pvGateway = null, dbGateway = null, runtimeGateway = null) {
+export function resolveInput(blueprint, node, name, variableStore, fallback, stack = new Set(), pvGateway = null, dbGateway = null, runtimeGateway = null, instance = null) {
   const raw = node.inputs ? node.inputs[name] : undefined;
   if (raw === undefined) return fallback;
-  return resolveDeep(blueprint, raw, variableStore, stack, pvGateway, dbGateway, runtimeGateway);
+  return resolveDeep(blueprint, raw, variableStore, stack, pvGateway, dbGateway, runtimeGateway, instance);
 }
 
 export function createActivityRunner({

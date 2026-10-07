@@ -577,7 +577,14 @@ export function renderWidgetNode(node, ctx = {}) {
   ctx.widgetEls = ctx.widgetEls || new Map();
   ctx.controlEls = ctx.controlEls || new Map();
   let el;
-  if (node.type === "container" || node.type === "tabs" || node.type === "fieldset" || node.type === "details") {
+  const customFactory = ctx.customWidgetFactories?.[node.type];
+  if (customFactory) {
+    el = customFactory(node, ctx);
+    if (!(el instanceof HTMLElement)) throw new Error(`Custom widget factory "${node.type}" must return an HTMLElement`);
+  } else if (["fileManager", "documentEditor", "filePicker", "terminal"].includes(node.type)) {
+    el = document.createElement("div");
+    el.textContent = t("widget.customRuntimeOnly", { type: node.type });
+  } else if (node.type === "container" || node.type === "tabs" || node.type === "fieldset" || node.type === "details") {
     el = document.createElement(node.type === "fieldset" ? "fieldset" : node.type === "details" ? "details" : "div");
     applyContainerStyle(el, node, ctx);
     if (node.type === "fieldset" && node.legend) {

@@ -194,6 +194,8 @@ export function createCl2CodeGenerator({
         return dynamic(`(() => { const array = (${input("array")}); const item = (${input("item")}); return [...(Array.isArray(array) ? array : []), item]; })()`);
       case "getGameTime":
         return dynamic(`(variableStore.get("__gameTime") ?? 0)`);
+      case "getParameter":
+        return dynamic(`(() => { const index = Number(${input("id")}); return Number.isInteger(index) && index >= 0 ? instance.parameters?.[index] : undefined; })()`);
       case "getActivityInstanceCount":
         return dynamic(`(variableStore.get("__activityCount:" + String(${input("activityId")})) ?? 0)`);
       case "getScheduleInstanceCount":
@@ -332,7 +334,7 @@ export function createCl2CodeGenerator({
         const queueCode = node.inputs?.queue === undefined
           ? inputCode(node, "queueId", "main")
           : inputCode(node, "queue", "main");
-        return `activityGateway((${inputCode(node, "activityId")}), (${queueCode}), instance, node, (${inputCode(node, "payload", null)})); ${go}`;
+        return `activityGateway((${inputCode(node, "activityId")}), (${queueCode}), instance, node, (${inputCode(node, "payload", null)}), (${inputCode(node, "parameters", [])})); ${go}`;
       }
       case "consumeTime":
         return `timeGateway(Number(${inputCode(node, "minutes", 0)}) || 0); ${go}`;

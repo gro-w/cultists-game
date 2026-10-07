@@ -54,8 +54,8 @@ export class Taskbar {
     if (!this.startMenuEl) return;
     this.startMenuEl.replaceChildren();
     const apps = this.apps || [];
-    const phase = apps.find(({ icon }) => icon.iconId === "off-duty");
-    const regularApps = apps.filter(({ icon }) => icon.iconId !== "off-duty");
+    const phase = apps.find(({ icon }) => icon.programId === "off-duty-open" || icon.iconId === "/home/menu/下班.lnk");
+    const regularApps = apps.filter(({ icon }) => icon !== phase?.icon);
     const heading = document.createElement("div");
     heading.className = "start-menu-group-title";
     heading.textContent = t("legacy.4562024ddec7");

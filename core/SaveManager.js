@@ -1,4 +1,5 @@
 import { t } from "./i18n/index.js";
+import { VirtualFileSystem } from "./VirtualFileSystem.js";
 /**
  * SaveManager - the single owner of the save/restore boundary (plan §12
  * "存档系统"). Produces/consumes a versioned envelope:
@@ -37,7 +38,8 @@ const SAVE_FORMAT = "cultists-ng-save";
 // from saves. v7 replaces hard-coded keyword/game-state fields with generic
 // content state providers; canonical content remains outside player saves.
 // v8 persists Activity execution progress, trace, breakpoints, and pause location.
-const SAVE_FORMAT_VERSION = 8;
+// v9 embeds the mutable virtual filesystem; launcher/layout state now belongs to its .lnk files.
+const SAVE_FORMAT_VERSION = 9;
 
 function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -56,12 +58,13 @@ export class SaveManager {
 
     activityQueueRegistry,
     windowManager,
-    desktopIconManager,
+    virtualFileSystem,
     eventStateRegistry,
     onboardingManager = eventStateRegistry,
     stateProviders = {},
     runtimeStores = {},
     saveableVariable = defaultSaveableVariable,
+    windowStateFilter = () => true,
     activityExecutionService,
     resumePendingActivities,
     engineVersion = "0.1.0",
@@ -71,11 +74,12 @@ export class SaveManager {
     this.publicVariableManager = publicVariableManager;
     this.activityQueueRegistry = activityQueueRegistry;
     this.windowManager = windowManager;
-    this.desktopIconManager = desktopIconManager;
+    this.virtualFileSystem = virtualFileSystem;
     this.eventStateRegistry = eventStateRegistry || onboardingManager;
     this.stateProviders = stateProviders;
     this.runtimeStores = runtimeStores;
     this.saveableVariable = saveableVariable;
+    this.windowStateFilter = windowStateFilter;
     this.activityExecutionService = activityExecutionService;
     this.resumePendingActivities = resumePendingActivities || (() => {});
     this.engineVersion = engineVersion;
@@ -96,8 +100,8 @@ export class SaveManager {
         publicVariables: this.publicVariableManager.snapshot(),
 
         queues: this.activityQueueRegistry.snapshot(),
-        windows: this.windowManager.snapshotInstances(),
-        desktopIcons: this.desktopIconManager.toJSON(),
+        windows: this.windowManager.snapshotInstances().filter((window) => this.windowStateFilter(window)),
+        virtualFileSystem: this.virtualFileSystem.snapshot(),
         onboarding: this.eventStateRegistry.snapshot(),
         providers: Object.fromEntries(Object.entries(this.stateProviders).map(([id, provider]) => [id, provider.snapshot()])),
         runtime: Object.fromEntries(Object.entries(this.runtimeStores).map(([id, store]) => [id, store.snapshot()])),
@@ -119,7 +123,7 @@ export class SaveManager {
 
     if (!isPlainObject(state.queues)) throw new Error(t("error.a102f79c5ad2"));
     if (!Array.isArray(state.windows)) throw new Error(t("error.efa8dccb1c3c"));
-    if (!Array.isArray(state.desktopIcons)) throw new Error(t("error.8bca35f224da"));
+    VirtualFileSystem.validateDocument(state.virtualFileSystem);
     if (!isPlainObject(state.onboarding)) throw new Error(t("error.9473c8d9f55e"));
     if (!isPlainObject(state.providers)) throw new Error(t("error.259ba6024a9a"));
     if (!isPlainObject(state.runtime)) throw new Error(t("error.898897bbe786"));
@@ -167,8 +171,8 @@ export class SaveManager {
     this.publicVariableManager.restore(state.publicVariables);
 
     this.activityQueueRegistry.restore(state.queues);
-    this.windowManager.restoreInstances(state.windows);
-    this.desktopIconManager.restore(state.desktopIcons);
+    this.windowManager.restoreInstances(state.windows.filter((window) => this.windowStateFilter(window)));
+    this.virtualFileSystem.restore(state.virtualFileSystem);
     this.eventStateRegistry.restore(state.onboarding);
     for (const [id, provider] of Object.entries(this.stateProviders)) provider.restore(state.providers[id] || {});
     for (const [id, store] of Object.entries(this.runtimeStores)) store.restore(state.runtime[id] || {});

@@ -17,9 +17,41 @@ import { t } from "./i18n/index.js";
  * running Activity engine.
  */
 export class DesktopIconManager {
-  constructor(icons = []) {
+  constructor(icons = [], { virtualFileSystem = null, appRegistry = null } = {}) {
     this.icons = new Map();
+    this.virtualFileSystem = virtualFileSystem;
+    this.appRegistry = appRegistry;
     icons.forEach((icon, index) => this.register({ order: index, ...icon }));
+  }
+
+  listDirectory(directory) {
+    if (!this.virtualFileSystem) return this.list();
+    return this.virtualFileSystem.list(directory)
+      .map((entry, index) => {
+        const resolved = entry.path.endsWith(".lnk") ? this.virtualFileSystem.resolveShortcut(entry.path) : null;
+        const target = resolved?.target || entry;
+        const programId = target.type === "file" && !target.path.slice(target.path.lastIndexOf("/") + 1).includes(".")
+          ? target.content.trim() : null;
+        const program = programId ? this.appRegistry?.get(programId) : null;
+        const position = entry.metadata?.position;
+        const shortcut = entry.path.endsWith(".lnk");
+        const blueprintId = target.type === "directory"
+          ? "desktop.open-folder"
+          : program ? "desktop.launch-program" : "desktop.open-file";
+        return {
+          iconId: entry.path,
+          sourcePath: entry.path,
+          targetPath: target.path,
+          programId,
+          label: program?.title || (shortcut ? entry.path.slice(entry.path.lastIndexOf("/") + 1, -4) : entry.path.slice(entry.path.lastIndexOf("/") + 1)),
+          glyph: target.type === "directory" ? "📁" : program?.icon || (target.type === "file" && !target.path.slice(target.path.lastIndexOf("/") + 1).includes(".") ? this.appRegistry?.document?.defaultProgramIcon || "⚙️" : "📄"),
+          order: index,
+          position: { mode: "free", x: Number.isFinite(position?.x) ? position.x : 0, y: Number.isFinite(position?.y) ? position.y : index * 80 },
+          blueprintId,
+          inputs: { targetPath: target.path },
+          startMenu: true,
+        };
+      });
   }
 
   register(icon) {
@@ -47,7 +79,8 @@ export class DesktopIconManager {
   }
 
   /** Icons in display order (stable sort keeps insertion order for equal `order` values). */
-  list({ includeEngineOwned = false } = {}) {
+  list({ includeEngineOwned = false, directory = "/home/desktop" } = {}) {
+    if (this.virtualFileSystem) return this.listDirectory(directory);
     return [...this.icons.values()]
       .filter((icon) => includeEngineOwned || !icon.engineOwned)
       .map((icon, index) => ({ icon, index }))
@@ -57,6 +90,7 @@ export class DesktopIconManager {
 
   /** Moves an icon to a new grid order, shifting every other icon's order accordingly (plan §8.2 "拖动图标调整位置/选择图标顺序"). */
   reorder(iconId, newOrder) {
+    if (this.virtualFileSystem) return false;
     const icon = this.get(iconId);
     if (!icon) return false;
     icon.position = { mode: "grid" };
@@ -69,6 +103,11 @@ export class DesktopIconManager {
 
   /** Switches an icon to free x/y placement (plan §8.1 "自由 x/y"). */
   setFreePosition(iconId, x, y) {
+    if (this.virtualFileSystem) {
+      if (!this.virtualFileSystem.exists(iconId)) return false;
+      this.virtualFileSystem.updateMetadata(iconId, { position: { x, y } });
+      return true;
+    }
     const icon = this.get(iconId);
     if (!icon) return false;
     icon.position = { mode: "free", x, y };
@@ -76,6 +115,7 @@ export class DesktopIconManager {
   }
 
   setLogo(iconId, glyph) {
+    if (this.virtualFileSystem) return false;
     const icon = this.get(iconId);
     if (!icon) return false;
     icon.glyph = glyph;
@@ -83,6 +123,7 @@ export class DesktopIconManager {
   }
 
   setLabel(iconId, label) {
+    if (this.virtualFileSystem) return false;
     const icon = this.get(iconId);
     if (!icon) return false;
     icon.label = label;

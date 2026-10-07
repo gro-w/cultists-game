@@ -10,10 +10,15 @@
     "calendar-rules.json",
     "item-placements.json",
     "social-apps.json",
-    "app-definitions.json"
+    "app-definitions.json",
+    "virtual-filesystem.json"
   ],
   "windowManifest": [
     "example.json",
+    "file-manager.json",
+    "document.json",
+    "file-picker.json",
+    "terminal.json",
     "off-duty.json",
     "off-duty-blocked.json",
     "his.json",
@@ -31,7 +36,7 @@
     "ending-screen.json",
     "turtle-soup.json"
   ],
-  "desktopIcons": "desktop-icons.json",
+  "virtualFileSystem": "virtual-filesystem.json",
   "blueprintNodes": "blueprint-nodes.framework.json",
   "activityLists": [
     "default.json",

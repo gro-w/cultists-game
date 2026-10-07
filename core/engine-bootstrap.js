@@ -21,6 +21,9 @@ import { GameClock } from "./GameClock.js";
 import { TimeService } from "./TimeService.js";
 import { StateBoundaryService } from "./StateBoundaryService.js";
 import { DesktopIconManager } from "./DesktopIconManager.js";
+import { VirtualFileSystem } from "./VirtualFileSystem.js";
+import { AppProgramRegistry } from "./AppProgramRegistry.js";
+import { createVirtualFileWidgetFactories } from "./VirtualFileWidgets.js";
 import { buildBuiltinIconBlueprint } from "./BuiltinIconBlueprints.js";
 import { DataStructureManager } from "./DataStructureManager.js";
 import { DataStore } from "./DataStore.js";
@@ -60,7 +63,9 @@ export async function bootstrap(rootEl) {
   if (isDevEntry() && await dataLoader.detectDevServer()) {
     dataLoader.connectChangeEvents({ onChange: (payload) => eventBus.emit("data:changed", payload) });
   }
-  const icons = await dataLoader.loadJSON(config.desktopIcons, { optional: true }) || [];
+  const appDefinitions = await dataLoader.loadJSON(config.appDefinitions || "app-definitions.json");
+  const appRegistry = new AppProgramRegistry(appDefinitions, eventBus);
+  const filesystemDefaults = await dataLoader.loadJSON(config.virtualFileSystem || "virtual-filesystem.json");
   const customBlueprintNodes = await dataLoader.loadJSON(frameworkManifest.documents?.blueprintNodes || config.blueprintNodes, { optional: true }) || [];
   customBlueprintNodes.forEach((node) => registerCustomActivityNode(node));
   await windowDefinitions.loadManifest(config.windowManifest, "windows/");
@@ -82,6 +87,22 @@ export async function bootstrap(rootEl) {
   await audioPlayback.mount("bgm.json");
   const i18n = new I18nManager({ eventBus, language: config.language || "zh-cn", supportedLanguages: config.supportedLanguages });
   setActiveI18nManager(i18n);
+  const virtualFileSystem = new VirtualFileSystem(filesystemDefaults, eventBus);
+  /* DEV-TOOLS:START */
+  if (isDevEntry()) {
+    if (appDefinitions.programs?.some((program) => program.id === "dev-mode-launcher")
+      || filesystemDefaults.entries?.some((entry) => entry.metadata?.coreOnly === true
+        || ["/opt/dev-mode-launcher", "/home/desktop/开发人员模式.lnk"].includes(entry.path))) {
+      throw new Error("Developer-mode program and filesystem entries must be injected by core, not declared in data");
+    }
+    virtualFileSystem.allowCoreOnlyEntries = true;
+    appRegistry.registerCoreProgram({ id: "dev-mode-launcher", title: t("legacy.5e276d748766"), icon: "🛠️", kind: "window", target: "dev-mode-launcher" });
+    virtualFileSystem.injectCoreEntries([
+      { path: "/opt/dev-mode-launcher", type: "file", content: "dev-mode-launcher", metadata: { coreOnly: true } },
+      { path: "/home/desktop/开发人员模式.lnk", type: "file", content: "/opt/dev-mode-launcher", metadata: { coreOnly: true, position: { x: 172, y: 8 } } },
+    ]);
+  }
+  /* DEV-TOOLS:END */
   Object.entries(config.initialVariables || {}).forEach(([key, value]) => {
     variableStore.set(key, value);
   });
@@ -179,13 +200,20 @@ export async function bootstrap(rootEl) {
         && (value === null || ["boolean", "number", "string"].includes(typeof value));
     },
   };
-  const iconManager = new DesktopIconManager(icons);
-  // This ID is reserved by the engine. Ignore stale content/save data so the
-  // developer entry can never be supplied or configured by the game package.
-  iconManager.unregister("dev-mode-launcher-icon");
+  const iconManager = new DesktopIconManager([], { virtualFileSystem, appRegistry });
+
   const dialogueRegistry = new DisplayReceiverRegistry();
   content.installDisplayReceivers?.({ dialogueRegistry });
   const shell = new DesktopShell(windowManager, windowDefinitions, eventBus, rootEl, gameClock, variableStore, publicVariables, dataStore, runtimeGateway, dialogueRegistry, content.customWidgetFactories);
+  Object.assign(content.customWidgetFactories, createVirtualFileWidgetFactories({
+    virtualFileSystem,
+    appRegistry,
+    eventBus,
+    windowManager,
+    openWindow: (windowId) => shell.openWindow(windowId),
+    openVirtualPath: (path, sourceInstanceId, parameters) => shell.openVirtualPath?.(path, sourceInstanceId, parameters),
+  }));
+  shell.virtualFileSystem = virtualFileSystem;
   runtimeGateway.dispatchDisplay = (target, payload) => {
     const isRoommateDialogue = target === "dorm-bottom";
     const resolvedTarget = isRoommateDialogue ? "ending-screen" : target;
@@ -219,11 +247,16 @@ export async function bootstrap(rootEl) {
   const entries = [...ids].map((id) => manifestEntries.get(id)).filter(Boolean);
   if (entries.length) await activityDefinitions.loadManifest(entries, "activities/");
 
+  let windowStateFilter = () => true;
+  /* DEV-TOOLS:START */
+  if (!isDevEntry()) windowStateFilter = (window) => !String(window?.windowId || "").startsWith("dev-");
+  /* DEV-TOOLS:END */
   const saveManager = new SaveManager({
     gameClock, variableStore, publicVariableManager: publicVariables,
-    activityQueueRegistry: queues, windowManager, desktopIconManager: iconManager,
+    activityQueueRegistry: queues, windowManager, virtualFileSystem,
     eventStateRegistry: eventState, stateProviders: { ...content.stateProviders, stateBoundary, i18n }, runtimeStores: content.runtimeStores,
     saveableVariable: content.saveableVariable,
+    windowStateFilter,
     activityExecutionService: null, resumePendingActivities: () => {}, engineVersion: config.version,
   });
   const apiGateway = createApiRegistry({ eventBus, variableStore, publicVariableManager: publicVariables, activityQueueRegistry: queues, shell, timeService, dataStore, runtimeGateway, audioPlayback });
@@ -261,15 +294,15 @@ export async function bootstrap(rootEl) {
   });
   apiGateway.register("engine.activity.cancel", ({ instanceId }) => execution.cancel(instanceId));
 
-  function enqueueActivity(activityId, queueId = "main", payload = null) {
+  function enqueueActivity(activityId, queueId = "main", payload = null, parameters = []) {
     const queue = queues.get(queueId) || queues.register(queueId);
     const definition = activityDefinitions.get(activityId);
     if (!definition) return null;
-    const instance = queue.append({ activityId, payload, currentNodeId: definition.blueprint?.startNodeId || null });
+    const instance = queue.append({ activityId, payload, parameters, currentNodeId: definition.blueprint?.startNodeId || null });
     eventBus.emit(ACTIVITY_EVENTS.appended, { queueId, instance: { ...instance } });
     return instance;
   }
-  function runActivity(activityId, queueId = "main", { ignoreAvailability = false } = {}) {
+  function runActivity(activityId, queueId = "main", { ignoreAvailability = false, parameters = [] } = {}) {
     /* DEV-TOOLS:START */
     console.log("[NG dialogue] runActivity requested", { activityId, queueId, hasQueue: Boolean(queues.get(queueId)), hasDefinition: Boolean(activityDefinitions.get(activityId)) });
     /* DEV-TOOLS:END */
@@ -288,7 +321,7 @@ export async function bootstrap(rootEl) {
       /* DEV-TOOLS:END */
       return null;
     }
-    const instance = queue.append({ activityId });
+    const instance = queue.append({ activityId, parameters });
     eventBus.emit(ACTIVITY_EVENTS.appended, { queueId, instance: { ...instance } });
     const runner = executeActivity({ queue, definition, instance });
     /* DEV-TOOLS:START */
@@ -324,7 +357,9 @@ export async function bootstrap(rootEl) {
         }
         return shell.openWindow(id);
       },
-      activityGateway: (id, target, source, node, payload) => node?.type === "insertActivity" ? enqueueActivity(id, target || "main", payload) : runActivity(id, target || "main"),
+      activityGateway: (id, target, source, node, payload, parameters) => node?.type === "insertActivity"
+        ? enqueueActivity(id, target || "main", payload, parameters)
+        : runActivity(id, target || "main", { parameters }),
         eventGateway: (name, payload) => {
         /* DEV-TOOLS:START */
         console.log("[NG dialogue] eventGateway", name, payload);
@@ -408,10 +443,34 @@ export async function bootstrap(rootEl) {
     return runInlineBlueprint(widgetEventsQueue, `widget:${windowId}:${widgetId}:${eventName}`, blueprint);
   }
   function runIconBlueprint(icon) {
+    if (["desktop.launch-program", "desktop.open-folder", "desktop.open-file"].includes(icon.blueprintId)) {
+      return openVirtualPath(icon.inputs?.targetPath);
+    }
     const builtin = buildBuiltinIconBlueprint(icon.blueprintId, icon.inputs || {});
     if (builtin) return runInlineBlueprint(iconEventsQueue, `icon:${icon.iconId}`, builtin);
     return runActivity(icon.blueprintId, "desktop-icons");
   }
+  function openVirtualPath(path, _sourceInstanceId, parameters = []) {
+    const entry = virtualFileSystem.get(path);
+    if (!entry) return null;
+    const target = entry.path.endsWith(".lnk") ? virtualFileSystem.resolveShortcut(entry.path)?.target : entry;
+    if (!target) return null;
+    if (target.type === "directory") {
+      const state = shell.openWindow("file-manager");
+      eventBus.emit("file-manager:open-path", { instanceId: state.instanceId, path: target.path });
+      return state;
+    }
+    const filename = target.path.slice(target.path.lastIndexOf("/") + 1);
+    if (!filename.includes(".")) {
+      const program = appRegistry.get(target.content.trim());
+      if (program?.kind === "window") return shell.openWindow(program.target);
+      if (program?.kind === "activity") return runActivity(program.target, "desktop-icons", { parameters: appRegistry.getActivityParameters(program.id, parameters) });
+    }
+    const state = shell.openWindow("document");
+    eventBus.emit("document:open-request", { instanceId: state.instanceId, path: target.path });
+    return state;
+  }
+  shell.openVirtualPath = openVirtualPath;
   shell.runWidgetEvent = runWidgetEvent;
   shell.saveManager = saveManager;
   shell.runIconBlueprint = runIconBlueprint;
@@ -439,6 +498,9 @@ export async function bootstrap(rootEl) {
       dbGateway: dataStore,
       runtimeGateway,
       iconManager,
+      virtualFileSystem,
+      appRegistry,
+      appDefinitions,
       dataStructureManager: structures,
       dataStore,
       publicVariableManager: publicVariables,
@@ -454,14 +516,6 @@ export async function bootstrap(rootEl) {
       },
       refreshIcons: () => shell.refreshIcons(),
     });
-    iconManager.register({
-      iconId: "dev-mode-launcher-icon",
-      glyph: "🛠️",
-      label: t("legacy.5e276d748766"),
-      blueprintId: "desktop.open-window",
-      inputs: { windowId: "dev-mode-launcher" },
-      engineOwned: true,
-    });
     shell.refreshIcons();
     // Match the legacy `?dev` route: open the developer workbench immediately
     // and keep it above ordinary game windows for the whole session.
@@ -475,5 +529,5 @@ export async function bootstrap(rootEl) {
     const instance = enqueueActivity(startup.activityId, startup.queueId || "main");
     if (instance) consumer.consume(startup.queueId || "main");
   }
-  return { eventBus, windowManager, windowDefinitionStore: windowDefinitions, shell, variableStore, i18n, audioPlayback, contentPackage: content, eventRouter, activityDefinitionStore: activityDefinitions, activityQueueRegistry: queues, activityExecutionService: execution, activityApi: { enqueue: enqueueActivity, run: runActivity, read: (q, id) => queues.getEntry(q, id), list: (q, f) => queues.listEntries(q, f), update: (q, id, p) => queues.updateEntry(q, id, p), complete: (q, id) => queues.completeEntry(q, id), cancel: (q, id) => queues.cancelEntry(q, id), consume: (q) => consumer.consume(q), callApi: (id, payload) => apiGateway.call(id, payload), apis: () => apiGateway.list() }, dataLoader, dataStore, dataStructureManager: structures, publicVariableManager: publicVariables, gameClock, timeService, stateBoundary, iconManager, saveManager, eventStateRegistry: eventState };
+  return { eventBus, windowManager, windowDefinitionStore: windowDefinitions, shell, variableStore, i18n, audioPlayback, contentPackage: content, eventRouter, activityDefinitionStore: activityDefinitions, activityQueueRegistry: queues, activityExecutionService: execution, activityApi: { enqueue: enqueueActivity, run: runActivity, read: (q, id) => queues.getEntry(q, id), list: (q, f) => queues.listEntries(q, f), update: (q, id, p) => queues.updateEntry(q, id, p), complete: (q, id) => queues.completeEntry(q, id), cancel: (q, id) => queues.cancelEntry(q, id), consume: (q) => consumer.consume(q), callApi: (id, payload) => apiGateway.call(id, payload), apis: () => apiGateway.list() }, dataLoader, dataStore, dataStructureManager: structures, publicVariableManager: publicVariables, gameClock, timeService, stateBoundary, iconManager, virtualFileSystem, appRegistry, saveManager, eventStateRegistry: eventState };
 }

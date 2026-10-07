@@ -1,4 +1,23 @@
 {
+  "version": 1,
+  "defaultProgramIcon": "⚙️",
+  "programs": [
+    { "id": "his", "title": "HIS 医疗系统", "icon": "🏥", "kind": "window", "target": "his" },
+    { "id": "chatgtp", "title": "ChatGTP", "icon": "🤖", "kind": "window", "target": "chatgtp" },
+    { "id": "dialogue", "title": "夜聊 Messenger", "icon": "💬", "kind": "window", "target": "dialogue" },
+    { "id": "notebook", "title": "笔记本", "icon": "📓", "kind": "window", "target": "notebook" },
+    { "id": "status", "title": "状态与属性", "icon": "📊", "kind": "window", "target": "status" },
+    { "id": "achievements", "title": "成就", "icon": "🏆", "kind": "window", "target": "achievements" },
+    { "id": "calendar", "title": "日历", "icon": "📅", "kind": "window", "target": "calendar" },
+    { "id": "locations", "title": "去往位置", "icon": "🗺️", "kind": "window", "target": "locations" },
+    { "id": "social-media", "title": "社交媒体", "icon": "📱", "kind": "window", "target": "social-media" },
+    { "id": "turtle-soup", "title": "海龟汤", "icon": "🐢", "kind": "window", "target": "turtle-soup" },
+    { "id": "off-duty-open", "title": "下班", "icon": "🌙", "kind": "activity", "target": "off-duty-open" },
+    { "id": "settings", "title": "设置", "icon": "⚙️", "kind": "window", "target": "settings" },
+    { "id": "file-manager", "title": "文件管理器", "icon": "🗂️", "kind": "window", "target": "file-manager" },
+    { "id": "document", "title": "文档", "icon": "📝", "kind": "window", "target": "document" },
+    { "id": "terminal", "title": "终端", "icon": "⌨️", "kind": "window", "target": "terminal" }
+  ],
   "hisCustom": {
     "version": 2,
     "id": "his_custom",

@@ -111,7 +111,7 @@ const definitions = {
     label: t("legacy.0f72ed20b9d6"),
     flowInputs: [flowIn()],
     flowOutputs: [flowOut()],
-    valueInputs: [valueIn("activityId", "string"), valueIn("queueId", "string")],
+    valueInputs: [valueIn("activityId", "string"), valueIn("queueId", "string"), valueIn("parameters", "array")],
   },
   // Generic event-bus action (plan §8.3 "desktop.emit-event"): lets a
   // blueprint announce a domain-agnostic event other systems can subscribe
@@ -376,6 +376,11 @@ const definitions = {
     label: t("legacy.812ea53a8728"),
     valueOutputs: [valueOut("value", "number")],
   },
+  getParameter: {
+    label: t("node.getParameter"),
+    valueInputs: [valueIn("id", "number")],
+    valueOutputs: [valueOut("value")],
+  },
   getActivityInstanceCount: {
     label: t("legacy.137795627288"),
     valueInputs: [valueIn("activityId", "string")],
@@ -390,7 +395,7 @@ const definitions = {
     label: t("legacy.611b518dad60"),
     flowInputs: [flowIn()],
     flowOutputs: [flowOut()],
-    valueInputs: [valueIn("activityId", "string"), valueIn("queue", "string"), valueIn("addTime", "number")],
+    valueInputs: [valueIn("activityId", "string"), valueIn("queue", "string"), valueIn("addTime", "number"), valueIn("parameters", "array")],
   },
   consumeTime: {
     label: t("legacy.611b518dad60"),

@@ -28,6 +28,8 @@ media/                     历史宣传资源和设计稿
 
 当前 manifest 的主要连接关系：`game-manifest.json` → `framework-manifest.json`、`activity-manifest.json`、窗口 manifest、数据库、公共变量、本地变量和 Activity 列表。默认 Activity 是 `default`，队列定义包含 `work`、`social`、`managers`、`main` 以及窗口/Widget/桌面事件队列。
 
+虚拟文件系统由 `core/VirtualFileSystem.js` 持有，初始树位于 `data/virtual-filesystem.json`，程序定义位于 `data/app-definitions.json`。桌面 `/home/desktop`、开始菜单 `/home/menu`、程序 `/opt`、垃圾桶 `/trash`、命令 `/usr/bin` 是初始目录；无扩展名程序文件内容仅为稳定程序 ID，`.lnk` 内容仅为目标路径，图标由 `AppProgramRegistry` 解析。玩家文件树、内容和摆放位置由 SaveManager v9 存档。开发人员模式程序/快捷方式不属于任何 `data/` 文件：core 仅在精确 `?dev` 启动时注册程序并注入带 `metadata.coreOnly` 的 VFS 条目；core-owned 文件只能由 core 注入，允许用户保存其桌面位置。应用定义校验拒绝 `dev-*` 程序 ID/目标，默认值编辑器拒绝将 core-only 条目写入 canonical 默认树。普通模式恢复时过滤 core-only 文件、指向它们的快捷方式和 `dev-*` 窗口；开发模式恢复会保留当前 core 注册的条目及其保存位置，不接受存档伪造的未知 core-only 条目。`VirtualFileWidgets.js` 提供通用文件管理器、文档/选择器和 CMD 外观的 POSIX shell 终端；终端内容保持 `/cwd>` 提示符和 POSIX 路径，shell 通过内建 `cd`、`pwd`、`which`、`export` 与 VFS 中的 `/usr/bin` 命令运行，默认 `PATH=/usr/bin:/opt`，支持通过 `/opt/<program>` 或 PATH 名称启动程序。`VirtualShell.js` 实现 shell 变量、内建命令、if/case/for/while 等控制结构、`sh -c` 和 VFS 脚本运行（支持 `sh /path/to/script.sh`），`sh` 无参数时在当前终端内进入隔离的嵌套 shell，`exit` 恢复父 shell。Activity 实例的 `parameters` 数组随队列快照持久化；应用程序管理器只在 Activity 目标下编辑参数数组；应用启动时把配置参数传入 Activity，终端调用时再追加命令行参数。Activity 蓝图通过 `getParameter(id)`（0 起始索引）读取，创建/排队 Activity 的 `runActivity`、`insertActivity` 节点可传参数。`dev/AppProgramManagerView.js` 负责应用程序定义编辑。`probes/virtual-filesystem-probe.mjs`、`probes/save-manager-probe.mjs`、`probes/virtual-terminal-probe.mjs`、`probes/virtual-file-ui-probe.mjs` 和 `probes/activity-parameters-probe.mjs` 分别覆盖 VFS/core 注入、存档模式隔离与 Activity 参数恢复、POSIX shell/启动命令、桌面与文档 UI，以及 Activity 参数编辑、传递和恢复契约。
+
 CL2（Cultists Blueprint & Script Language 2）是当前 Activity 的生产脚本图格式。`core/Cl2Parser.js`、`core/Cl2Validator.js` 和 `core/Cl2Serializer.js` 提供统一解析、验证和编辑器回写；`core/Cl2Compiler.js` 与 `core/Cl2CodeGenerator.js` 在定义加载时把已验证的图编译成节点专门化 JavaScript：每个流程节点直接包含其操作，静态流程边降低为数字程序计数器目标，纯值依赖生成 JavaScript 表达式，并在编译期折叠常量算术和可静态判定的分支。生成执行器不再调用 `hooks.executeNode`，Activity 热路径也不递归调用 `resolveInput`/`evaluateValueOutput`；`evaluateValueOutput` 仅供 Activity 外的可用性等消费者使用。数字 PC 状态机仍负责支持循环、等待、断点和恢复；生命周期回调维护 trace/checkpoint，宿主副作用仍经过通用能力网关。编译器还为 `blockUntil` 生成公共变量、通用变量和时钟依赖；运行时只对可识别的相关事件重评等待条件，动态/未知依赖仍保守监听，等待代次可丢弃已失效的事件快照回调。队列实例在每个节点后同步更新，但纯同步节点不逐步广播 `activity:changed`；等待、断点、终止和显式生命周期操作仍通知订阅者。`WindowFrame` 将变量、时钟、Activity 和运行时集合失效请求合并到下一浏览器帧，每帧最多重建一次 widget 根节点，并丢弃窗口销毁后的待执行刷新，避免长 Activity 循环重复同步重绘所有窗口 DOM。`ActivityQueue` 同时保留有序实例数组与 `instanceId` 索引 Map，逐节点检查点通过索引更新，避免队列越长每步扫描开销越大。`ActivityRunner` 以实例内 Set 索引已执行节点与断点，避免每个节点都扫描随 Activity 增长的存档数组；`activity-execution-id-index-probe` 验证了长流程执行不再逐节点线性检查。编译结果保留 `debugInfo.nodeIds`、节点到生成源码行/端口/流程目标的 `sourceMap`、生成源码和优化计数；Activity Runner 的 `getDebugState()` 暴露当前步骤、等待状态、已执行节点和实例本地变量。开发人员模式可选择可执行流程步骤、设置节点断点、检查进度与变量并展开查看本次生成源码；编译/调试元数据只在内存中，而实例的 `executionStep`、`executionTrace`、断点列表/暂停节点、当前节点和已执行节点随 Activity 队列存档。存档版本 v8 开始持久化这些进度字段；恢复后重新挂接暂停 runner，继续时越过当前断点一次后执行，不重复已完成副作用。`data/activity-manifest.json` 的 Activity 均指向 `.CL2.txt`；旧 JSON 仅保留为迁移审计输入。
 
 `Cl2Compiler` 生成 source map 行号时按代码块增量累计换行数，避免对每个节点反复切片、扫描不断增长的源码前缀。`probes/cl2-source-map-performance-probe.mjs` 覆盖源码行映射正确性，并测量大型合成 Activity 的编译开销。
@@ -71,6 +73,8 @@ node dev-server.js --port 8001 --lang zh-hans
 | `WindowManager`、`WindowDefinitionStore`、桌面模块 | 桌面、窗口、Widget 和布局 |
 | `DataStore`、`DataStructureManager`、`PublicVariableManager`、`LocalVariableManager` | canonical 数据、结构定义、公共变量定义和 Activity 本地变量命名定义；本地值属于实例 |
 | `SaveManager`、`VariableStore`、`EventStateRegistry` | 存档、运行时变量、事件状态和恢复 |
+| `VirtualFileSystem`、`AppProgramRegistry`、`DesktopIconManager` | VFS 文件树、程序 ID/图标解析和快捷方式投影；core-only 条目仅由 core 注入 |
+| `VirtualFileWidgets` | 通用文件管理器、文档/文件选择器、终端及文件操作界面 |
 | `data/activities/*.CL2.txt`、`data/windows/`、`data/databases/` | CL2 Activity、窗口定义和游戏数据库；窗口事件、物品活动和自定义节点内嵌图使用 `{ "cl2": "..." }` |
 - `dev/`、`dev-server.js` | 开发编辑器、调试器和本地数据写盘 |
 - `core/i18n/`、`dev/I18nManagerView.js` | Core 与开发人员模式 locale modules、统一 `t()` 取词、语言状态和开发人员语言管理器 |
@@ -84,6 +88,7 @@ node dev-server.js --port 8001 --lang zh-hans
 - 玩家可见计时和持久化副作用通过 Activity 执行。工作、社交、管理器和主队列由 manifest 配置，不能在入口中按业务语义偷偷插入 Activity。
 - 游戏内容使用稳定 ID。窗口、Activity、数据库、公共变量和资源之间通过 manifest/schema 连接。
 - 公共变量、数据库、窗口、Activity 和存档各有边界；数据库编辑器写 canonical 数据，存档调试器只改运行时存档。
+- VFS 初始树是 canonical game 数据，用户文件、目录和位置属于 VFS 存档；开发人员模式程序与快捷方式只由 core 在精确 `?dev` 启动时注入，不能写入任何 data 文件。普通模式恢复会剔除 core-only 条目。
 - 运行时集合可在数据定义中声明 `stateAliases`，用于旧稳定 ID 到 canonical ID 的恢复兼容；同一存档同时存在两者时 canonical ID 优先。
 - 运行时集合可声明 `activityQueueId` 和 `projectPayload`，以通用方式把 Activity 队列投影为 CL2 列表；队列追加/变更会发出 `runtime:collection-changed`，窗口可据此刷新，core 不解释 payload 的业务语义。患者列表使用 framework 声明的未解决 work 队列投影并通过稳定的 dialogue Activity ID 关联患者数据库；室友/社交联系人列表同样从未解决 social 队列派生，不能静态读取全量数据库。
 - 运行时集合支持数据声明的派生字段、跨数据库 lookup、前置占位记录和 `stateCollectionId`；ChatGTP 关键词窗口按来源、类别、关键词三行筛选并复用 `notebookKeywords` 的 canonical 收集状态，空类别值表示跳过类别过滤。

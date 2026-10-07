@@ -207,6 +207,7 @@ input[type="range"] {
   background: rgba(0, 0, 128, 0.4);
   outline: none;
 }
+.desktop-icon:focus-visible { outline: 1px dotted #fff; outline-offset: 1px; }
 
 .desktop-icon .icon-glyph {
   font-size: 32px;
@@ -2251,4 +2252,152 @@ input[type="range"] {
 .chatgtp-selected-keyword { flex:1; min-width:0; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .chatgtp-query-btn { align-self:flex-start; flex:0 0 auto; }
 
+.ng-app-program-manager { display:flex; flex-direction:column; gap:6px; height:100%; min-height:0; }
+.ng-app-program-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:6px; flex:0 0 auto; }
+.ng-app-program-toolbar label { display:flex; align-items:center; gap:5px; }
+.ng-app-program-list { display:flex; flex-direction:column; gap:6px; flex:1 1 auto; min-height:0; overflow:auto; padding:4px; }
+.ng-app-program-row { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; align-items:end; margin:0; padding:8px; }
+.ng-app-program-row label { display:flex; flex-direction:column; gap:3px; min-width:0; font-size:11px; }
+.ng-app-program-row input, .ng-app-program-row select { box-sizing:border-box; width:100%; min-width:0; }
+.ng-app-program-parameters { grid-column:1 / -1; }
+.ng-app-program-parameters textarea { box-sizing:border-box; width:100%; min-width:0; resize:vertical; }
+.ng-app-program-row input[readonly] { background:#e0e0e0; color:#555; }
+.ng-app-program-row legend { font-weight:700; }
+
 /* DEV-TOOLS:END */
+
+/* Core virtual-filesystem applications. */
+.vfs-file-manager, .vfs-document-editor, .vfs-file-picker, .vfs-terminal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+}
+.vfs-file-manager-toolbar, .vfs-file-picker-toolbar, .vfs-document-toolbar,
+.vfs-terminal-controls, .vfs-file-picker-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  flex: 0 0 auto;
+}
+.vfs-file-manager-up {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  cursor: default;
+}
+.vfs-file-manager-up:hover, .vfs-file-manager-up:focus-visible { border: 1px dotted #000080; background: #dce9ff; }
+.vfs-address, .vfs-file-picker-filename, .vfs-terminal-input {
+  min-width: 0;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+}
+.vfs-file-manager-view {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  margin: 4px;
+  border: 2px inset #dfdfdf;
+  background: #fff;
+}
+.vfs-file-item {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 88px;
+  min-height: 82px;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #111;
+  text-align: center;
+  cursor: default;
+}
+.vfs-file-item:hover, .vfs-file-item.drop-target, .vfs-file-picker-entry:focus-visible {
+  border: 1px dotted #000080;
+  background: #dce9ff;
+}
+.vfs-file-item:focus-visible { outline: 1px dotted #000080; }
+.vfs-file-item-icon { font-size: 28px; line-height: 32px; }
+.vfs-file-item-label { max-width: 100%; overflow-wrap: anywhere; font-size: 11px; }
+.vfs-file-manager-empty, .vfs-file-manager-status, .vfs-file-picker-status,
+.vfs-document-status { padding: 4px 6px; font-size: 11px; color: #555; }
+.vfs-document-toolbar { position: relative; border-bottom: 1px solid #808080; }
+.vfs-document-filename { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vfs-document-text {
+  flex: 1 1 auto;
+  min-height: 0;
+  resize: none;
+  padding: 8px;
+  border: 2px inset #dfdfdf;
+  background: #fff;
+  color: #111;
+  font: 13px/1.45 monospace;
+}
+.vfs-document-menu, .vfs-context-menu {
+  position: fixed;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 3px;
+  background: #c0c0c0;
+  box-shadow: 2px 2px 4px #0008;
+}
+.vfs-document-menu { position: absolute; top: 100%; left: 5px; }
+.vfs-document-menu[hidden] { display: none !important; }
+.vfs-context-menu-item, .vfs-document-menu-item {
+  width: 100%;
+  padding: 5px 18px;
+  border: 0;
+  background: transparent;
+  color: #111;
+  text-align: left;
+  cursor: default;
+}
+.vfs-context-menu-item:hover, .vfs-document-menu-item:hover,
+.vfs-context-menu-item:focus-visible, .vfs-document-menu-item:focus-visible { background: #000080; color: #fff; }
+.vfs-context-menu-separator { height: 1px; margin: 3px 2px; background: #808080; border-bottom: 1px solid #fff; }
+.vfs-context-error { max-width: 220px; padding: 4px; color: #900; font-size: 11px; }
+.vfs-file-picker-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 4px;
+  padding: 4px;
+  overflow: auto;
+  border: 2px inset #dfdfdf;
+  background: #fff;
+}
+.vfs-file-picker-entry { display: block; width: 100%; padding: 4px 6px; border: 1px solid transparent; background: transparent; text-align: left; }
+.vfs-file-picker-filename { margin: 0 6px; }
+.vfs-file-picker-actions { justify-content: flex-end; }
+.vfs-terminal { position: relative; padding: 5px; border: 2px inset #808080; background: #000; color: #f2f2f2; font: 13px/1.35 monospace; }
+.vfs-terminal-output { flex: 1 1 auto; min-height: 0; margin: 0; padding: 8px; overflow: auto; background:#000; color:#f2f2f2; white-space: pre-wrap; overflow-wrap: anywhere; }
+.vfs-terminal-controls { border-top: 1px solid #555; }
+.vfs-terminal-prompt { flex: 0 0 auto; white-space: pre; }
+.vfs-terminal-input { border: 0; outline: 0; background: #000; color: #fff; font: inherit; }
+.vfs-terminal-input:focus-visible { outline:1px dotted #c0c0c0; outline-offset:1px; }
+.vfs-terminal-input::placeholder { color: #999; }
+.vfs-terminal .win95-btn { flex: 0 0 auto; font-size: 11px; }
+.vfs-osk-window {
+  position: absolute;
+  right: 12px;
+  bottom: 46px;
+  z-index: 2;
+  max-width: calc(100% - 24px);
+  padding: 5px;
+  border: 2px outset #dfdfdf;
+  background: #c0c0c0;
+  box-shadow: 2px 2px 5px #0008;
+}
+.vfs-osk-row { display: flex; justify-content: center; gap: 3px; margin: 3px 0; }
+.vfs-osk-key { min-width: 26px; min-height: 27px; padding: 2px 5px; font: 12px monospace; }
+.vfs-osk-space { min-width: 72px; }

@@ -1,7 +1,8 @@
 // DEV-TOOLS:START
 import { t } from "../core/i18n/index.js";
-import { writeDataFile } from "./devApi.js";
+import { downloadTextFile, writeDataFile } from "./devApi.js";
 import { encodeCl2Blueprints } from "../core/Cl2EmbeddedSerializer.js";
+import { VirtualFileSystem } from "../core/VirtualFileSystem.js";
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -37,6 +38,7 @@ function isSpecializedDataFile(path) {
     "onboarding.json",
     "desktop-icons.json",
     "blueprint-nodes.framework.json",
+    "app-definitions.json",
   ]).has(path);
 }
 
@@ -62,7 +64,9 @@ export class DataJsonEditorView {
       <div class="ng-list-manager-activities">
         <div class="ng-list-manager-toolbar">
           <strong data-role="filename">${t("legacy.63b2603c5b9d")}JSON ${t("legacy.49deaf7da20d")}</strong>
-          <button type="button" data-action="save">${t("legacy.a48ea55015f4")}JSON</button>
+          <button type="button" data-action="save-memory">${t("editor.saveToMemory")}</button>
+          <button type="button" data-action="download">${t("legacy.3f10b573ee1b")}JSON</button>
+          <button type="button" data-action="write-disk">${t("editor.writeToDisk")}</button>
           <span class="ng-editor-status"></span>
         </div>
         <div class="ng-data-json-tree" data-role="tree"></div>
@@ -74,7 +78,9 @@ export class DataJsonEditorView {
     this.treeEl = el.querySelector('[data-role="tree"]');
     this.statusEl = el.querySelector(".ng-editor-status");
     this.filterEl.addEventListener("input", () => this.renderList());
-    el.querySelector('[data-action="save"]').addEventListener("click", () => this.save());
+    el.querySelector('[data-action="save-memory"]').addEventListener("click", () => this.saveToMemory());
+    el.querySelector('[data-action="download"]').addEventListener("click", () => this.download());
+    el.querySelector('[data-action="write-disk"]').addEventListener("click", () => this.save());
   }
 
   renderList() {
@@ -175,11 +181,48 @@ export class DataJsonEditorView {
     return row;
   }
 
+  validateDraft() {
+    if (this.selectedPath === "virtual-filesystem.json") VirtualFileSystem.validateDefaultDocument(this.draft);
+  }
+
+  serializedDraft() {
+    this.validateDraft();
+    return encodeCl2Blueprints(this.draft, this.selectedPath);
+  }
+
   async save() {
     if (!this.selectedPath) return;
     try {
-      await writeDataFile(this.selectedPath, `${JSON.stringify(encodeCl2Blueprints(this.draft, this.selectedPath), null, 2)}\n`);
-      this.statusEl.textContent = t("legacy.d4371481b26a");
+      const value = this.serializedDraft();
+      const text = `${JSON.stringify(value, null, 2)}\n`;
+      await writeDataFile(this.selectedPath, text);
+      const persisted = await this.dataLoader.loadJSON(this.selectedPath, { cache: false });
+      if (JSON.stringify(persisted) !== JSON.stringify(this.draft)) throw new Error(t("editor.diskReadbackMismatch"));
+      this.dataLoader.cache.set(this.dataLoader.resolve(this.selectedPath), clone(persisted));
+      this.statusEl.textContent = t("editor.wroteToDisk");
+    } catch (error) {
+      this.statusEl.textContent = `${t("legacy.e92dc2256061")}: ${error.message}`;
+    }
+  }
+
+  saveToMemory() {
+    if (!this.selectedPath || this.draft === null) return;
+    try {
+      const value = this.serializedDraft();
+      this.dataLoader.cache.set(this.dataLoader.resolve(this.selectedPath), clone(value));
+      this.statusEl.textContent = t("editor.savedToMemory");
+    } catch (error) {
+      this.statusEl.textContent = `${t("legacy.e92dc2256061")}: ${error.message}`;
+    }
+  }
+
+  download() {
+    if (!this.selectedPath || this.draft === null) return;
+    try {
+      const value = this.serializedDraft();
+      const filename = this.selectedPath.split("/").at(-1);
+      downloadTextFile(filename, `${JSON.stringify(value, null, 2)}\n`);
+      this.statusEl.textContent = t("editor.downloaded");
     } catch (error) {
       this.statusEl.textContent = `${t("legacy.e92dc2256061")}: ${error.message}`;
     }

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import "./register-framework-nodes.mjs";
 import EventBus from "../core/EventBus.js";
 import { GameClock } from "../core/GameClock.js";
@@ -15,6 +16,9 @@ import { KeywordManager } from "../core/KeywordManager.js";
 import { OnboardingManager } from "../core/OnboardingManager.js";
 import { ACTIVITY_EVENTS } from "../core/ActivityEvents.js";
 import { SaveManager } from "../core/SaveManager.js";
+import { VirtualFileSystem } from "../core/VirtualFileSystem.js";
+
+const filesystemDefaults = JSON.parse(await readFile(new URL("../data/virtual-filesystem.json", import.meta.url), "utf8"));
 
 
 // A branch/blockUntil Activity that consumes time once, then waits forever
@@ -54,7 +58,7 @@ const breakpointDefinition = {
   },
 };
 
-function makeSession() {
+function makeSession({ windowStateFilter = () => true } = {}) {
   const eventBus = new EventBus();
   const gameClock = new GameClock(eventBus);
 
@@ -77,14 +81,15 @@ function makeSession() {
   const activityExecutionService = new ActivityExecutionService(eventBus);
   const windowManager = new WindowManager(eventBus, { storage: { getItem: () => null, setItem: () => {} } });
   const desktopIconManager = new DesktopIconManager();
+  const virtualFileSystem = new VirtualFileSystem(filesystemDefaults, eventBus);
   const keywordManager = new KeywordManager({ dataStore, eventBus });
   const onboardingManager = new OnboardingManager({ eventBus });
 
-  function runActivity(activityId, queueId = "main") {
+  function runActivity(activityId, queueId = "main", parameters = []) {
     const queue = activityQueueRegistry.get(queueId);
     const definition = activityDefinitionStore.get(activityId);
     if (!queue || !definition) return null;
-    const instance = queue.append({ activityId });
+    const instance = queue.append({ activityId, parameters });
     activityExecutionService.run({
       queue,
       definition,
@@ -127,7 +132,8 @@ function makeSession() {
     dataStore,
     activityQueueRegistry,
     windowManager,
-    desktopIconManager,
+    virtualFileSystem,
+    windowStateFilter,
     stateProviders: { keywords: keywordManager },
     saveableVariable: (key) => !["calendar:days", "achievements:items", "event:value", "query:records"].includes(key)
       && !String(key).startsWith("gameState:")
@@ -140,7 +146,7 @@ function makeSession() {
   return {
     eventBus, gameClock, variableStore, publicVariableManager, dataStructureManager, dataStore,
     activityDefinitionStore, activityQueueRegistry, activityExecutionService, windowManager,
-    desktopIconManager, keywordManager, onboardingManager, saveManager, runActivity,
+    desktopIconManager, virtualFileSystem, keywordManager, onboardingManager, saveManager, runActivity,
   };
 }
 
@@ -154,10 +160,10 @@ function makeSession() {
   session.variableStore.set("query:records", [{ id: "patient-1", name: "游戏数据" }]);
   session.dataStore.createRecord("notes", { id: "n1", text: "hello" });
   session.windowManager.open({ id: "inventory", title: "Inventory", width: 300, height: 200 });
-  session.desktopIconManager.register({ iconId: "icon-a", blueprintId: "desktop.open-window", inputs: { windowId: "inventory" } });
+  session.virtualFileSystem.createFile("/home/desktop/save-probe.txt", "saved in the virtual disk");
   session.keywordManager.collect("fever", 1);
   session.onboardingManager.markMilestone("his_opened");
-  const instance = session.runActivity("waiting");
+  const instance = session.runActivity("waiting", "main", ["saved-argument", 27]);
 
   // Waiting mid-flow before saving.
   assert.equal(session.activityQueueRegistry.get("main").get(instance.instanceId).status, "unresolved");
@@ -165,9 +171,12 @@ function makeSession() {
 
   const saved = session.saveManager.snapshot();
   assert.equal(saved.format, "cultists-ng-save");
-  assert.equal(saved.version, 8);
+  assert.equal(saved.version, 9);
   assert.equal(saved.createdAtGameTime, 110);
   assert.equal(Object.hasOwn(saved.state, "databases"), false, "game data must not be embedded in saves");
+  assert.equal(Object.hasOwn(saved.state, "desktopIcons"), false, "desktop launchers live in the filesystem, not a parallel save payload");
+  assert.equal(saved.state.virtualFileSystem.entries.find((entry) => entry.path === "/home/desktop/save-probe.txt").content, "saved in the virtual disk");
+  assert.deepEqual(saved.state.queues.main[0].parameters, ["saved-argument", 27], "Activity arguments are included in the SaveManager snapshot");
   assert.equal(Object.hasOwn(saved.state.variables, "calendar:days"), false, "derived calendar UI data must not be saved");
   assert.equal(Object.hasOwn(saved.state.variables, "achievements:items"), false, "derived achievement UI data must not be saved");
   assert.equal(Object.hasOwn(saved.state.variables, "query:records"), false, "database result arrays must not be saved");
@@ -184,7 +193,7 @@ function makeSession() {
   const restoredWindow = restoredSession.windowManager.getByWindowId("inventory");
   assert.ok(restoredWindow, "window instance must survive restore");
   assert.equal(restoredWindow.width, 300);
-  assert.deepEqual(restoredSession.desktopIconManager.list().map((icon) => icon.iconId), ["icon-a"]);
+  assert.equal(restoredSession.virtualFileSystem.readFile("/home/desktop/save-probe.txt"), "saved in the virtual disk");
   assert.ok(restoredSession.keywordManager.has("fever"), "collected keyword must survive restore");
   assert.equal(restoredSession.keywordManager.get("fever").collectedDay, 1);
   assert.ok(restoredSession.onboardingManager.hasMilestone("his_opened"), "onboarding milestone must survive restore");
@@ -193,6 +202,7 @@ function makeSession() {
   // scan) and is still correctly blocked - object identity/consistency
   // across restore (plan §13 Phase 7 acceptance).
   const restoredInstance = restoredSession.activityQueueRegistry.get("main").get(instance.instanceId);
+  assert.deepEqual(restoredInstance.parameters, ["saved-argument", 27], "Activity arguments survive SaveManager restore");
   assert.equal(restoredInstance.status, "unresolved");
   assert.equal(restoredInstance.waitingNodeId, "wait");
   assert.equal(terminalCount, 0);
@@ -201,6 +211,38 @@ function makeSession() {
   restoredSession.variableStore.set("approved", true);
   assert.equal(restoredSession.activityQueueRegistry.get("main").get(instance.instanceId).status, "resolved");
   assert.equal(terminalCount, 1);
+}
+
+// --- breakpoint progress survives the actual SaveManager restore path ------
+{
+  const developerSession = makeSession();
+  developerSession.virtualFileSystem.allowCoreOnlyEntries = true;
+  developerSession.virtualFileSystem.injectCoreEntries([
+    { path: "/opt/dev-mode-launcher", type: "file", content: "dev-mode-launcher" },
+    { path: "/home/desktop/开发人员模式.lnk", type: "file", content: "/opt/dev-mode-launcher" },
+  ]);
+  developerSession.windowManager.open({ id: "dev-mode-launcher", title: "Developer mode" });
+  developerSession.windowManager.open({ id: "inventory", title: "Inventory" });
+  const save = developerSession.saveManager.snapshot();
+  assert.ok(save.state.windows.some((window) => window.windowId === "dev-mode-launcher"), "developer-mode session retains its core-owned windows");
+
+  const regularSession = makeSession({ windowStateFilter: (window) => !window.windowId.startsWith("dev-") });
+  regularSession.saveManager.restore(save);
+  assert.equal(regularSession.virtualFileSystem.exists("/opt/dev-mode-launcher"), false);
+  assert.equal(regularSession.virtualFileSystem.exists("/home/desktop/开发人员模式.lnk"), false);
+  assert.equal(regularSession.windowManager.getByWindowId("dev-mode-launcher"), null, "ordinary restores filter developer-only windows");
+  assert.ok(regularSession.windowManager.getByWindowId("inventory"), "ordinary windows still restore");
+  assert.ok(regularSession.saveManager.snapshot().state.windows.every((window) => !window.windowId.startsWith("dev-")), "ordinary saves omit developer-only windows");
+
+  const reloadedDeveloperSession = makeSession();
+  reloadedDeveloperSession.virtualFileSystem.allowCoreOnlyEntries = true;
+  reloadedDeveloperSession.virtualFileSystem.injectCoreEntries([
+    { path: "/opt/dev-mode-launcher", type: "file", content: "dev-mode-launcher" },
+    { path: "/home/desktop/开发人员模式.lnk", type: "file", content: "/opt/dev-mode-launcher" },
+  ]);
+  reloadedDeveloperSession.saveManager.restore(save);
+  assert.equal(reloadedDeveloperSession.virtualFileSystem.readFile("/home/desktop/开发人员模式.lnk"), "/opt/dev-mode-launcher");
+  assert.ok(reloadedDeveloperSession.windowManager.getByWindowId("dev-mode-launcher"), "developer restores retain core-owned windows");
 }
 
 // --- breakpoint progress survives the actual SaveManager restore path ------
@@ -251,7 +293,7 @@ function makeSession() {
   assert.throws(() => session.saveManager.restore(null), /valid object/);
   assert.throws(() => session.saveManager.restore({ format: "something-else" }), /Unknown save format/);
   assert.throws(() => session.saveManager.restore({ format: "cultists-ng-save", version: 999 }), /Unsupported save version/);
-  assert.throws(() => session.saveManager.restore({ format: "cultists-ng-save", version: 7 }), /Unsupported save version/);
+  assert.throws(() => session.saveManager.restore({ format: "cultists-ng-save", version: 8 }), /Unsupported save version/);
   assert.throws(() => session.saveManager.restore({ format: "cultists-ng-save", version: 3 }), /Unsupported save version/);
 
   // A structurally-valid-looking envelope with an internally-inconsistent
