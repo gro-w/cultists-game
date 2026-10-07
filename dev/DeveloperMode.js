@@ -7,14 +7,13 @@ import { ActivityEditorView } from "./ActivityEditorView.js";
 import { ActivityDebuggerView } from "./ActivityDebuggerView.js";
 import { WindowDefinitionManagerView } from "./WindowDefinitionManagerView.js";
 import { WindowEditorView } from "./WindowEditorView.js";
-import { DesktopIconEditorView } from "./DesktopIconEditorView.js";
+import { InitialVirtualFileSystemEditorView } from "./InitialVirtualFileSystemEditorView.js";
 import { DataStructureEditorView } from "./DataStructureEditorView.js";
 import { DatabaseEditorView, DatabaseRecordEditorView } from "./DatabaseDebuggerView.js";
 import { PublicVariableEditorView } from "./PublicVariableEditorView.js";
 import { PublicVariableDebuggerView } from "./PublicVariableDebuggerView.js";
 import { LocalVariableEditorView } from "./LocalVariableEditorView.js";
 import { OnboardingEditorView } from "./OnboardingEditorView.js";
-import { StartMenuEditorView } from "./StartMenuEditorView.js";
 import { SaveDebuggerView } from "./SaveDebuggerView.js";
 import { BlueprintNodeManagerView } from "./BlueprintNodeManagerView.js";
 import { DataJsonEditorView } from "./DataJsonEditorView.js";
@@ -30,14 +29,13 @@ import { parseCl2 } from "../core/Cl2Parser.js";
 const LIST_MANAGER_WINDOW_ID = "dev-activity-list-manager";
 const DEBUGGER_WINDOW_ID = "dev-activity-debugger";
 const WINDOW_MANAGER_WINDOW_ID = "dev-window-definition-manager";
-const ICON_EDITOR_WINDOW_ID = "dev-desktop-icon-editor";
+const INITIAL_VFS_EDITOR_WINDOW_ID = "dev-initial-vfs-editor";
 const STRUCTURE_MANAGER_WINDOW_ID = "dev-structure-manager";
 const DATABASE_EDITOR_WINDOW_ID = "dev-database-editor";
 const PUBLIC_VARIABLE_MANAGER_WINDOW_ID = "dev-public-variable-manager";
 const PUBLIC_VARIABLE_DEBUGGER_WINDOW_ID = "dev-public-variable-debugger";
 const LOCAL_VARIABLE_MANAGER_WINDOW_ID = "dev-local-variable-manager";
 const ONBOARDING_EDITOR_WINDOW_ID = "dev-onboarding-editor";
-const START_MENU_EDITOR_WINDOW_ID = "dev-start-menu-editor";
 const SAVE_DEBUGGER_WINDOW_ID = "dev-save-debugger";
 const BLUEPRINT_NODE_MANAGER_WINDOW_ID = "dev-blueprint-node-manager";
 const DATA_JSON_EDITOR_WINDOW_ID = "dev-data-json-editor";
@@ -74,7 +72,6 @@ export async function initDeveloperMode({
   pvGateway,
   dbGateway,
   runtimeGateway,
-  iconManager,
   appRegistry,
   dataStructureManager,
   dataStore,
@@ -88,7 +85,6 @@ export async function initDeveloperMode({
   customBlueprintNodes = [],
   forceEndWork = null,
 
-  refreshIcons,
 }) {
   setActiveI18nManager(i18n);
   const model = createActivityListManagerModel();
@@ -292,19 +288,22 @@ export async function initDeveloperMode({
     body: windowManagerView.el,
   });
 
-  // Desktop icon editor (plan §8.2) - edits the live iconManager shared
-  // with DesktopShell directly, so drag/order/logo/blueprint edits preview
-  // immediately via `refreshIcons`, and persists to desktop-icons.json.
-  const iconEditorView = new DesktopIconEditorView({ iconManager, refreshIcons });
+  const initialFileSystem = await dataLoader.loadJSON(engineConfig?.virtualFileSystem || "virtual-filesystem.json", { cache: false });
+  const initialVfsEditorView = new InitialVirtualFileSystemEditorView({
+    dataLoader,
+    initialDocument: initialFileSystem,
+    appRegistry,
+    filePath: engineConfig?.virtualFileSystem || "virtual-filesystem.json",
+  });
   windowDefinitionStore.register({
-    id: ICON_EDITOR_WINDOW_ID,
-    title: t("legacy.f670ba061ea9"),
-    icon: "🖱",
-    width: 640,
-    height: 420,
+    id: INITIAL_VFS_EDITOR_WINDOW_ID,
+    title: t("initialVfs.title"),
+    icon: "🗂",
+    width: 1040,
+    height: 680,
     resizable: true,
     singleInstance: true,
-    body: iconEditorView.el,
+    body: initialVfsEditorView.el,
   });
 
   // Data structure manager (plan §9.2) - visual editor for structures.framework.json,
@@ -410,18 +409,6 @@ export async function initDeveloperMode({
     body: onboardingEditorView.el,
   });
 
-  const startMenuEditorView = new StartMenuEditorView({ iconManager });
-  windowDefinitionStore.register({
-    id: START_MENU_EDITOR_WINDOW_ID,
-    title: t("legacy.3a330440b31b"),
-    icon: "📋",
-    width: 420,
-    height: 360,
-    resizable: true,
-    singleInstance: true,
-    body: startMenuEditorView.el,
-  });
-
   function openBlueprintNodeEditor(node) {
     const view = new ActivityEditorView({
       activityId: `blueprint-node-${node.id}`,
@@ -500,14 +487,14 @@ export async function initDeveloperMode({
       <h4>${t("legacy.50aed45e1389")}JSON ${t("legacy.736e99f26407")}</h4>
       <button type="button" class="ng-dev-desktop-icon" data-tool="list-manager"><span class="ng-dev-icon-glyph">🛠</span><span>Activity ${t("legacy.35bd37ad3381")}</span></button>
       <button type="button" class="ng-dev-desktop-icon" data-tool="window-manager"><span class="ng-dev-icon-glyph">🪟</span><span>${t("legacy.3b195364abf4")}</span></button>
-      <button type="button" class="ng-dev-desktop-icon" data-tool="icon-editor"><span class="ng-dev-icon-glyph">🖱</span><span>${t("legacy.f670ba061ea9")}</span></button>
+      <button type="button" class="ng-dev-desktop-icon" data-tool="initial-vfs-editor"><span class="ng-dev-icon-glyph">🗂</span><span>${t("initialVfs.title")}</span></button>
       <button type="button" class="ng-dev-desktop-icon" data-tool="app-program-manager"><span class="ng-dev-icon-glyph">🧩</span><span>${t("appManager.title")}</span></button>
       <button type="button" class="ng-dev-desktop-icon" data-tool="structure-manager"><span class="ng-dev-icon-glyph">🧱</span><span>${t("legacy.aee22ce678c6")}</span></button>
       <button type="button" class="ng-dev-desktop-icon" data-tool="database-debugger"><span class="ng-dev-icon-glyph">🗄</span><span>${t("legacy.df85571b280e")}</span></button>
       <button type="button" class="ng-dev-desktop-icon" data-tool="public-variable-manager"><span class="ng-dev-icon-glyph">🌐</span><span>${t("legacy.122d971cae32")}</span></button>
       <button type="button" class="ng-dev-desktop-icon" data-tool="local-variable-manager"><span class="ng-dev-icon-glyph">📍</span><span>${t("legacy.2e7c7cd97d6f")}</span></button>
       <button type="button" class="ng-dev-desktop-icon" data-tool="onboarding-editor"><span class="ng-dev-icon-glyph">💡</span><span>${t("legacy.1bf0c2e6cd4c")}</span></button>
-      <button type="button" class="ng-dev-desktop-icon" data-tool="start-menu-editor"><span class="ng-dev-icon-glyph">📋</span><span>${t("legacy.3a330440b31b")}</span></button>
+
       <button type="button" class="ng-dev-desktop-icon" data-tool="blueprint-node-manager"><span class="ng-dev-icon-glyph">🔷</span><span>${t("legacy.0fc5566a6ab3")}</span></button>
       <button type="button" class="ng-dev-desktop-icon" data-tool="data-json-editor"><span class="ng-dev-icon-glyph">🗃</span><span>${t("legacy.fb91bdb18b33")}JSON ${t("legacy.fefac5e5a9aa")}</span></button>
       <button type="button" class="ng-dev-desktop-icon" data-tool="i18n-manager"><span class="ng-dev-icon-glyph">🌐</span><span>i18n ${t("legacy.35bd37ad3381")}</span></button>
@@ -535,8 +522,8 @@ export async function initDeveloperMode({
   launcherEl.querySelector('[data-tool="window-debugger"]').addEventListener("click", () => {
     windowManager.open(windowDefinitionStore.get(WINDOW_DEBUGGER_WINDOW_ID));
   });
-  launcherEl.querySelector('[data-tool="icon-editor"]').addEventListener("click", () => {
-    windowManager.open(windowDefinitionStore.get(ICON_EDITOR_WINDOW_ID));
+  launcherEl.querySelector('[data-tool="initial-vfs-editor"]').addEventListener("click", () => {
+    windowManager.open(windowDefinitionStore.get(INITIAL_VFS_EDITOR_WINDOW_ID));
   });
   launcherEl.querySelector('[data-tool="app-program-manager"]').addEventListener("click", () => {
     windowManager.open(windowDefinitionStore.get(APP_PROGRAM_MANAGER_WINDOW_ID));
@@ -555,9 +542,6 @@ export async function initDeveloperMode({
   });
   launcherEl.querySelector('[data-tool="onboarding-editor"]').addEventListener("click", () => {
     windowManager.open(windowDefinitionStore.get(ONBOARDING_EDITOR_WINDOW_ID));
-  });
-  launcherEl.querySelector('[data-tool="start-menu-editor"]').addEventListener("click", () => {
-    windowManager.open(windowDefinitionStore.get(START_MENU_EDITOR_WINDOW_ID));
   });
   launcherEl.querySelector('[data-tool="blueprint-node-manager"]').addEventListener("click", () => {
     windowManager.open(windowDefinitionStore.get(BLUEPRINT_NODE_MANAGER_WINDOW_ID));
@@ -596,7 +580,7 @@ export async function initDeveloperMode({
     openListManager: () => windowManager.open(windowDefinitionStore.get(LIST_MANAGER_WINDOW_ID)),
     openDebugger: () => windowManager.open(windowDefinitionStore.get(DEBUGGER_WINDOW_ID)),
     openWindowManager: () => windowManager.open(windowDefinitionStore.get(WINDOW_MANAGER_WINDOW_ID)),
-    openIconEditor: () => windowManager.open(windowDefinitionStore.get(ICON_EDITOR_WINDOW_ID)),
+    openInitialVirtualFileSystemEditor: () => windowManager.open(windowDefinitionStore.get(INITIAL_VFS_EDITOR_WINDOW_ID)),
     openStructureManager: () => windowManager.open(windowDefinitionStore.get(STRUCTURE_MANAGER_WINDOW_ID)),
     openDatabaseDebugger: () => windowManager.open(windowDefinitionStore.get(DATABASE_EDITOR_WINDOW_ID)),
     openSaveDebugger: () => windowManager.open(windowDefinitionStore.get(SAVE_DEBUGGER_WINDOW_ID)),

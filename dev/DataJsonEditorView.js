@@ -36,7 +36,7 @@ function isSpecializedDataFile(path) {
     "seed-records-items.json",
     "public-variables.framework.json",
     "onboarding.json",
-    "desktop-icons.json",
+    "virtual-filesystem.json",
     "blueprint-nodes.framework.json",
     "app-definitions.json",
   ]).has(path);

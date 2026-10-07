@@ -538,5 +538,10 @@ export default {
     "editor.savedToMemory": "已保存到本次会话内存",
     "editor.downloaded": "已生成下载文件",
     "editor.diskReadbackMismatch": "磁盘读回内容与当前草稿不一致",
+    "editor.download": "下载 JSON",
+    "initialVfs.title": "初始虚拟文件系统编辑器",
+    "initialVfs.help": "左侧浏览初始文件树；右键可新建文件/文件夹、复制或粘贴快捷方式。双击文件可在右侧编辑。保存到内存仅影响本次会话，写入磁盘会更新初始文件树。",
+    "initialVfs.saveFile": "保存当前文件",
+    "initialVfs.noOpenFile": "请先在左侧打开一个文件",
   }
 };

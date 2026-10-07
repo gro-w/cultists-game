@@ -1,5 +1,5 @@
 const DEFAULT_ENV = Object.freeze({ PATH: "/usr/bin:/opt", HOME: "/home/desktop", PWD: "/home/desktop", OLDPWD: "/home/desktop" });
-const BUILTINS = new Set([":", "[", "break", "case", "cd", "command", "continue", "do", "done", "echo", "elif", "else", "esac", "eval", "exit", "export", "false", "fi", "for", "if", "in", "printf", "pwd", "return", "set", "sh", "shift", "test", "then", "true", "type", "until", "unset", "while", "which"]);
+const BUILTINS = new Set([":", "[", "break", "case", "cd", "command", "continue", "do", "done", "echo", "elif", "else", "esac", "eval", "exit", "export", "false", "fi", "for", "if", "in", "printf", "pwd", "return", "set", "shift", "test", "then", "true", "type", "until", "unset", "while", "which"]);
 const MAX_LOOP_ITERATIONS = 256;
 const VFS_COMMANDS = new Set(["cat", "cp", "ls", "mv", "rm", "touch"]);
 
@@ -311,6 +311,7 @@ function executeExternal(command, args, state, context) {
   }
   if (path.endsWith(".sh") || entry.content.startsWith("#!")) return runSubshell(path.endsWith(".sh") ? entry.content : entry.content.replace(/^#![^\n]*\n?/, ""), state, context, { scriptName: path, positionals: args });
   const content = entry.content.trim();
+  if (content === "sh") return executeShell(args, state, context);
   if (BUILTINS.has(content) || VFS_COMMANDS.has(content)) return executeBuiltin(content, args, state, context);
   (context.write || (() => {}))(`sh: ${command}: cannot execute`); return 126;
 }

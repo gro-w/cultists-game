@@ -11,7 +11,7 @@
 
 - Windows 95 风格桌面、任务栏、开始菜单、窗口和数据驱动应用
 - 存档内持久化的虚拟文件系统、无原生按钮阴影的桌面/文件管理器、可多开的文档编辑器和 CMD 外观的 POSIX shell 终端
-- 终端视觉采用黑底、灰色凹入边框和等宽文字模拟 cmd，命令仍为 Linux/POSIX shell，不支持 Windows 命令或盘符路径；内建 `cd`、`pwd`、`which`、`export`，默认 `PATH=/usr/bin:/opt`。虚拟路径既可使用 `/opt/his`，也可通过 PATH 名称启动应用。`sh` 支持嵌套 shell、`sh /path/to/script.sh` 和 `sh -c command`，并实现 if/case/for/while 等常用 POSIX 脚本结构。
+- 终端视觉采用黑底、灰色凹入边框和等宽文字模拟 cmd，命令仍为 Linux/POSIX shell，不支持 Windows 命令或盘符路径；`cd`、`pwd`、`which`、`export` 是 shell 内建命令，默认 `PATH=/usr/bin:/opt`。`/usr/bin` 保留 `ls`、`sh` 和文件操作命令，不放置 `cd`、`pwd` 这类 shell 内建命令；`sh` 是 `/usr/bin/sh` 中的外部命令。虚拟路径既可使用 `/opt/his`，也可通过 PATH 名称启动应用。`sh` 支持嵌套 shell、`sh /path/to/script.sh` 和 `sh -c command`，并实现 if/case/for/while 等常用 POSIX 脚本结构。
 - Activity 可接收并持久化参数；应用程序管理器为 Activity 目标编辑 JSON 参数数组，启动该应用时传入配置参数，终端命令行参数追加在其后。蓝图可通过“获取 Activity 参数”节点按从 0 开始的索引读取；`runActivity` 与 `insertActivity` 节点均可传参
 - 医院工作与宿舍生活两种场景，以及工作、社交、管理器和主活动队列
 - 确定性的游戏时钟：普通行动默认推进 20 分钟，睡眠和跨日按明确边界结算
@@ -112,7 +112,7 @@ media/                     历史宣传资源和设计稿
 - `data/activity-lists/`：按用途组织 Activity 的清单
 - `data/game-manifest.json`：内容包、初始状态、队列和入口配置
 
-编辑器写入 canonical 数据，存档调试器只修改存档和运行时状态。`data/virtual-filesystem.json` 保存初始文件树，`data/app-definitions.json` 保存程序 ID、图标和目标；无扩展名程序文件只包含稳定程序 ID，`.lnk` 只包含目标路径，图标由应用程序管理器提供。桌面 `/home/desktop`、开始菜单 `/home/menu`、程序目录 `/opt` 和垃圾桶 `/trash` 均属于存档中的 VFS。开发人员模式程序和快捷方式不在任何 `data/` 文件中，仅在精确 `?dev` 启动时由 core 注入；普通模式恢复会过滤 core 专属文件、指向它们的快捷方式及 `dev-*` 窗口。核心程序文件不可复制、移动、改名、写入或删除，其桌面位置可持久化。全部 JSON 数据编辑器对 VFS 默认值执行 schema 校验，并区分保存到内存、下载和写盘；存档调试器只处理运行时存档。运行时集合可以通过数据定义中的 `stateAliases` 兼容旧稳定 ID，恢复时 canonical ID 优先；也可以通过 `activityQueueId` 把 Activity 队列投影给 CL2 窗口列表，队列变化会自动触发窗口刷新。集合还支持声明式派生字段、数据库 lookup、前置占位选项和 canonical 收集状态复用；ChatGTP 窗口按来源、类别、关键词三行筛选，类别为“不选择”时跳过类别过滤。Activity 对话 transcript 支持只读回放，不会重新执行剧情节点；开发 Activity 调试器提供结局 Activity 触发入口，仍通过正常 `runActivity` API 执行。社交媒体窗口尺寸和标签栏布局与 main 分支旧应用保持一致。新增内容应优先使用 CL2 和数据，不要把业务逻辑写进 JavaScript。
+编辑器写入 canonical 数据，存档调试器只修改存档和运行时状态。`data/virtual-filesystem.json` 保存初始文件树，`data/app-definitions.json` 保存程序 ID、图标和目标；无扩展名程序文件只包含稳定程序 ID，`.lnk` 只包含目标路径，图标由应用程序管理器提供。桌面 `/home/desktop`、开始菜单 `/home/menu`、程序目录 `/opt` 和垃圾桶 `/trash` 均属于存档中的 VFS。开发人员模式程序和快捷方式不在任何 `data/` 文件中，仅在精确 `?dev` 启动时由 core 注入；普通模式恢复会过滤 core 专属文件、指向它们的快捷方式及 `dev-*` 窗口。核心程序文件不可复制、移动、改名、写入或删除，其桌面位置可持久化。初始虚拟文件系统编辑器直接编辑 `data/virtual-filesystem.json`，用同一窗口中的文件管理器和文档编辑器浏览、创建文件/文件夹、编辑内容、复制与粘贴快捷方式；支持保存到内存、下载和写入磁盘，保存前校验默认 VFS schema。桌面图标编辑器和开始菜单编辑器已合并移除，桌面 `/home/desktop` 与开始菜单 `/home/menu` 的初始内容统一由 VFS 文件树维护；存档调试器仍只处理运行时存档。运行时集合可以通过数据定义中的 `stateAliases` 兼容旧稳定 ID，恢复时 canonical ID 优先；也可以通过 `activityQueueId` 把 Activity 队列投影给 CL2 窗口列表，队列变化会自动触发窗口刷新。集合还支持声明式派生字段、数据库 lookup、前置占位选项和 canonical 收集状态复用；ChatGTP 窗口按来源、类别、关键词三行筛选，类别为“不选择”时跳过类别过滤。Activity 对话 transcript 支持只读回放，不会重新执行剧情节点；开发 Activity 调试器提供结局 Activity 触发入口，仍通过正常 `runActivity` API 执行。社交媒体窗口尺寸和标签栏布局与 main 分支旧应用保持一致。新增内容应优先使用 CL2 和数据，不要把业务逻辑写进 JavaScript。
 
 ChatGTP QA 与 Turtle Soup 的运行时数据分别由 `data/databases/chatgtpQaEntries.json` 和 `data/databases/turtleSoupPuzzles.json` 唯一持有；manifest 和探针不得重新引入已删除的重复 seed/native 文件。
 

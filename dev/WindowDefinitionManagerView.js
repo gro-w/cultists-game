@@ -6,8 +6,7 @@ import { t } from "../core/i18n/index.js";
  * `WindowDefinitionStore` (plan follow-up: "自定义窗口管理器也可以+-按钮
  * (新建、删除、复制)") so new/duplicate/delete actions are immediately
  * visible without a separate draft/refresh step, mirroring how
- * DesktopIconEditorView/DataStructureEditorView already edit their live
- * manager instances directly.
+ * DataStructureEditorView edits its live manager instance directly.
  */
 function defaultWindowDefinition(id) {
   return {

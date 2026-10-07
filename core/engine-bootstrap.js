@@ -497,8 +497,6 @@ export async function bootstrap(rootEl) {
       pvGateway: publicVariables,
       dbGateway: dataStore,
       runtimeGateway,
-      iconManager,
-      virtualFileSystem,
       appRegistry,
       appDefinitions,
       dataStructureManager: structures,
@@ -514,7 +512,6 @@ export async function bootstrap(rootEl) {
         eventBus.emit("developer:force_end_work", { source: "time-debugger" });
         shell.openWindow("off-duty");
       },
-      refreshIcons: () => shell.refreshIcons(),
     });
     shell.refreshIcons();
     // Match the legacy `?dev` route: open the developer workbench immediately

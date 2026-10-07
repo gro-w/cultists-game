@@ -538,5 +538,10 @@ export default {
     "editor.savedToMemory": "Saved in session memory",
     "editor.downloaded": "Download ready",
     "editor.diskReadbackMismatch": "The content read back from disk does not match the current draft",
+    "editor.download": "Download JSON",
+    "initialVfs.title": "Initial Virtual Filesystem Editor",
+    "initialVfs.help": "Browse the initial file tree on the left. Right-click to create files or folders, copy items, and paste shortcuts. Double-click a file to edit it on the right. Saving to memory affects this session; writing to disk updates the initial tree.",
+    "initialVfs.saveFile": "Save current file",
+    "initialVfs.noOpenFile": "Open a file from the left pane first",
   }
 };
