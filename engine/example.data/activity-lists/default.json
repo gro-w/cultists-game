@@ -1,4 +1,0 @@
-{
-  "id": "default",
-  "activityIds": ["default", "showcase", "system:ls", "system:cat", "system:cp", "system:mv", "system:touch"]
-}

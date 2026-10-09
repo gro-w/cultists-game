@@ -1,7 +1,0 @@
-/** CL2 demo: seed the data-backed inventory, announce onboarding, then open the sample window. */
-
-start: flowStart();
-seed: example-seed-inventory();
-announce: emitEvent("example:started", {});
-open: openWindow("welcome");
-end: end();

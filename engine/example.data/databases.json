@@ -1,9 +1,0 @@
-[
-  {
-    "databaseId": "exampleItems",
-    "recordType": "exampleItem",
-    "primaryKey": "id",
-    "allowDelete": false,
-    "recordFile": "item-records.json"
-  }
-]
