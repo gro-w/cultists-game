@@ -1,0 +1,9 @@
+/** CL2 command application: ls */
+reusablevalue invocation: getParameter[0];
+reusablevalue arguments: getProperty[invocation[], "arguments"];
+reusablevalue cwd: getProperty[invocation[], "cwd"];
+reusablevalue terminal: getProperty[invocation[], "terminalInstanceId"];
+
+start: flowStart();
+run: virtualFileSystem("ls", arguments[], null, null, null, null, cwd[], terminal[]);
+end: end();

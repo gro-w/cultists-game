@@ -1,0 +1,25 @@
+{
+  "id": "welcome",
+  "title": "Cultists Engine 示例",
+  "icon": "🌐",
+  "x": 360,
+  "y": 90,
+  "width": 520,
+  "height": 330,
+  "resizable": true,
+  "singleInstance": true,
+  "root": {
+    "widgetId": "welcome-root",
+    "type": "container",
+    "flow": "vertical",
+    "gap": 12,
+    "padding": 18,
+    "children": [
+      { "widgetId": "welcome-title", "type": "label", "text": "Cultists Engine 示例", "className": "engine-demo-title" },
+      { "widgetId": "welcome-copy", "type": "label", "text": "本示例包含文件浏览器、文档编辑器、虚拟终端和数据驱动物品系统。桌面新手引导会带你逐步体验。" },
+      { "widgetId": "welcome-features", "type": "button", "text": "查看引擎功能", "events": { "onClick": { "cl2": "start: flowStart(); run: runActivity(\"showcase\", \"main\"); end: end();" } } },
+      { "widgetId": "welcome-inventory", "type": "button", "text": "打开物品系统", "events": { "onClick": { "cl2": "start: flowStart(); open: openWindow(\"inventory\"); end: end();" } } },
+      { "widgetId": "welcome-hint", "type": "label", "text": "在文件浏览器中编辑虚拟文档；在终端试试 pwd、ls、cat 和 touch。物品调查、使用次数、金钱和时间均由数据库、结构与公共变量驱动。" }
+    ]
+  }
+}

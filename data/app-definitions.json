@@ -1,6 +1,7 @@
 {
   "version": 1,
   "defaultProgramIcon": "⚙️",
+  "defaultProgram": { "title": "默认应用程序", "icon": "⚙️", "kind": "window", "target": "terminal", "parameters": [] },
   "programs": [
     { "id": "his", "title": "HIS 医疗系统", "icon": "🏥", "kind": "window", "target": "his" },
     { "id": "chatgtp", "title": "ChatGTP", "icon": "🤖", "kind": "window", "target": "chatgtp" },
@@ -14,9 +15,14 @@
     { "id": "turtle-soup", "title": "海龟汤", "icon": "🐢", "kind": "window", "target": "turtle-soup" },
     { "id": "off-duty-open", "title": "下班", "icon": "🌙", "kind": "activity", "target": "off-duty-open" },
     { "id": "settings", "title": "设置", "icon": "⚙️", "kind": "window", "target": "settings" },
-    { "id": "file-manager", "title": "文件管理器", "icon": "🗂️", "kind": "window", "target": "file-manager" },
-    { "id": "document", "title": "文档", "icon": "📝", "kind": "window", "target": "document" },
-    { "id": "terminal", "title": "终端", "icon": "⌨️", "kind": "window", "target": "terminal" }
+    { "id": "file-manager", "title": "文件管理器", "icon": "🗂️", "kind": "window", "target": "file-manager", "parameters": [] },
+    { "id": "document", "title": "文档", "icon": "📝", "kind": "window", "target": "document", "parameters": [] },
+    { "id": "terminal", "title": "终端", "icon": "⌨️", "kind": "window", "target": "terminal", "parameters": [] },
+    { "id": "cat", "title": "cat", "icon": "📄", "kind": "activity", "target": "system:cat", "parameters": [] },
+    { "id": "cp", "title": "cp", "icon": "📋", "kind": "activity", "target": "system:cp", "parameters": [] },
+    { "id": "ls", "title": "ls", "icon": "📁", "kind": "activity", "target": "system:ls", "parameters": [] },
+    { "id": "mv", "title": "mv", "icon": "↪️", "kind": "activity", "target": "system:mv", "parameters": [] },
+    { "id": "touch", "title": "touch", "icon": "🖊️", "kind": "activity", "target": "system:touch", "parameters": [] }
   ],
   "hisCustom": {
     "version": 2,

@@ -1,0 +1,16 @@
+[
+  {
+    "id": "exampleItem",
+    "name": "示例物品",
+    "fields": [
+      { "id": "id", "type": "string", "required": true },
+      { "id": "name", "type": "string", "required": true },
+      { "id": "icon", "type": "string", "required": true },
+      { "id": "category", "type": "string", "required": true },
+      { "id": "investigationText", "type": "string", "required": true },
+      { "id": "useMinutes", "type": "integer", "required": true },
+      { "id": "moneyReward", "type": "integer", "required": true },
+      { "id": "initialQuantity", "type": "integer", "required": true }
+    ]
+  }
+]

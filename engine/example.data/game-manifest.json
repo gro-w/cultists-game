@@ -1,0 +1,37 @@
+{
+  "name": "Cultists Engine Example",
+  "version": "0.1.0-example",
+  "contentRoot": "./",
+  "language": "zh-cn",
+  "supportedLanguages": ["zh-cn", "en-us"],
+  "frameworkManifest": "framework-manifest.json",
+  "frameworkCollections": "framework-runtime.json",
+  "blueprintNodes": "blueprint-nodes.json",
+  "windowManifest": [
+    "welcome.json",
+    "features.json",
+    "file-manager.json",
+    "document.json",
+    "terminal.json",
+    "inventory.json",
+    "file-picker.json"
+  ],
+  "activityManifest": "activity-manifest.json",
+  "activityLists": ["default.json"],
+  "defaultActivity": { "activityId": "default", "queueId": "main" },
+  "queues": [
+    { "id": "main" },
+    { "id": "window-events", "nonBlocking": true },
+    { "id": "widget-events", "nonBlocking": true },
+    { "id": "desktop-icons", "nonBlocking": true }
+  ],
+  "virtualFileSystem": "virtual-filesystem.json",
+  "appDefinitions": "app-definitions.json",
+  "seedRecords": "item-records.json",
+  "tutorialOverlay": true,
+  "initialVariables": {
+    "demo:launchCount": 0,
+    "demo:activeItemId": "ticket",
+    "demo:lastItemResult": "选择物品后可调查或使用"
+  }
+}

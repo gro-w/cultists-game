@@ -1,0 +1,33 @@
+{
+  "files": [
+    "activity-lists/default.json",
+    "activities/default.CL2.txt",
+    "activities/showcase.CL2.txt",
+    "activities/system-cat.CL2.txt",
+    "activities/system-cp.CL2.txt",
+    "activities/system-ls.CL2.txt",
+    "activities/system-mv.CL2.txt",
+    "activities/system-touch.CL2.txt",
+    "activity-manifest.json",
+    "app-definitions.json",
+    "bgm.json",
+    "blueprint-nodes.json",
+    "data-files.json",
+    "databases.json",
+    "framework-manifest.json",
+    "framework-runtime.json",
+    "game-manifest.json",
+    "item-records.json",
+    "onboarding.json",
+    "public-variables.json",
+    "structures.json",
+    "virtual-filesystem.json",
+    "windows/features.json",
+    "windows/welcome.json",
+    "windows/file-manager.json",
+    "windows/document.json",
+    "windows/terminal.json",
+    "windows/inventory.json",
+    "windows/file-picker.json"
+  ]
+}

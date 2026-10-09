@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "defaultProgramIcon": "⚙️",
+  "defaultProgram": {
+    "title": "默认应用程序",
+    "icon": "🌐",
+    "kind": "window",
+    "target": "welcome"
+  },
+  "programs": [
+    { "id": "welcome", "title": "引擎演示", "icon": "🌐", "kind": "window", "target": "welcome" },
+    { "id": "file-manager", "title": "文件浏览器", "icon": "📁", "kind": "window", "target": "file-manager", "parameters": ["/home/desktop"] },
+    { "id": "document", "title": "文档编辑器", "icon": "📝", "kind": "window", "target": "document", "parameters": ["/home/desktop/演示文档.txt"] },
+    { "id": "terminal", "title": "终端", "icon": "⌨️", "kind": "window", "target": "terminal", "parameters": ["", "/home/desktop"] },
+    { "id": "inventory", "title": "物品系统", "icon": "🎒", "kind": "window", "target": "inventory" },
+    { "id": "ls", "title": "列出文件", "icon": "📃", "kind": "activity", "target": "system:ls" },
+    { "id": "cat", "title": "读取文件", "icon": "📄", "kind": "activity", "target": "system:cat" },
+    { "id": "cp", "title": "复制文件", "icon": "📋", "kind": "activity", "target": "system:cp" },
+    { "id": "mv", "title": "移动文件", "icon": "↪️", "kind": "activity", "target": "system:mv" },
+    { "id": "touch", "title": "创建空文件", "icon": "✚", "kind": "activity", "target": "system:touch" }
+  ]
+}

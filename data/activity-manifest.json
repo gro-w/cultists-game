@@ -1109,6 +1109,11 @@
       "file": "patient_01_07_closed_foot_fracture.CL2.txt",
       "displayName": "兼容入口：郑文博",
       "type": "his"
-    }
+    },
+    { "id": "system:cat", "file": "cat.CL2.txt", "displayName": "cat", "type": "system" },
+    { "id": "system:cp", "file": "cp.CL2.txt", "displayName": "cp", "type": "system" },
+    { "id": "system:ls", "file": "ls.CL2.txt", "displayName": "ls", "type": "system" },
+    { "id": "system:mv", "file": "mv.CL2.txt", "displayName": "mv", "type": "system" },
+    { "id": "system:touch", "file": "touch.CL2.txt", "displayName": "touch", "type": "system" }
   ]
 }

@@ -1,0 +1,73 @@
+{
+  "id": "inventory",
+  "title": "物品系统",
+  "icon": "🎒",
+  "x": 320,
+  "y": 65,
+  "width": 660,
+  "height": 560,
+  "resizable": true,
+  "singleInstance": true,
+  "root": {
+    "widgetId": "inventory-root",
+    "type": "container",
+    "flow": "vertical",
+    "gap": 8,
+    "padding": 14,
+    "children": [
+      { "widgetId": "inventory-heading", "type": "label", "text": "数据驱动物品系统", "className": "engine-demo-title" },
+      { "widgetId": "inventory-time", "type": "clock", "format": "default" },
+      {
+        "widgetId": "inventory-money-row",
+        "type": "container",
+        "flow": "horizontal",
+        "gap": 6,
+        "children": [
+          { "widgetId": "inventory-money-label", "type": "label", "text": "公共变量 #10 金钱：" },
+          { "widgetId": "inventory-money-value", "type": "label", "text": { "nodeId": "money", "port": "value" } },
+          { "widgetId": "inventory-use-count-label", "type": "label", "text": "　公共变量 #11 使用次数：" },
+          { "widgetId": "inventory-use-count-value", "type": "label", "text": { "nodeId": "useCount", "port": "value" } }
+        ]
+      },
+      { "widgetId": "inventory-public-state-note", "type": "label", "text": "物品栏状态由公共变量 #12 持有；列表记录来自数据库并与运行时库存合并。" },
+      {
+        "widgetId": "inventory-list",
+        "type": "list",
+        "className": "demo-inventory-list panel-inset",
+        "items": { "nodeId": "items", "port": "value" },
+        "itemLabelTemplate": "{{icon}} {{name}} × {{quantity}}",
+        "itemMetaTemplate": "{{category}} · 使用 {{useMinutes}} 分钟 · 奖励 {{moneyReward}} 金钱 · 已使用 {{value}} 次",
+        "itemClassName": "demo-item-row",
+        "itemActions": [
+          { "id": "inspect", "label": "调查", "className": "win95-btn bevel-out demo-item-inspect", "eventName": "onInspect" },
+          { "id": "use", "label": "使用", "className": "win95-btn bevel-out demo-item-use", "eventName": "onUse" }
+        ],
+        "events": {
+          "onInspect": { "cl2": "start: flowStart(); inspect: example-inspect-item({\"variable\":\"event:value\"}); end: end();" },
+          "onUse": { "cl2": "start: flowStart(); use: example-use-item({\"variable\":\"event:value\"}); end: end();" }
+        }
+      },
+      { "widgetId": "inventory-detail-title", "type": "label", "text": { "nodeId": "activeName", "port": "value" } },
+      { "widgetId": "inventory-investigation-text", "type": "label", "className": "demo-investigation-copy panel-inset", "text": { "nodeId": "activeInvestigation", "port": "value" } },
+      { "widgetId": "inventory-action-result", "type": "label", "text": { "variable": "demo:lastItemResult" } }
+    ]
+  },
+  "valueGraph": {
+    "nodes": {
+      "money": { "id": "money", "type": "getPublicVariable", "inputs": { "id": 10 }, "next": {} },
+      "useCount": { "id": "useCount", "type": "getPublicVariable", "inputs": { "id": 11 }, "next": {} },
+      "inventoryState": { "id": "inventoryState", "type": "getPublicVariable", "inputs": { "id": 12 }, "next": {} },
+      "databaseItems": { "id": "databaseItems", "type": "getRuntimeCollection", "inputs": { "collectionId": "inventory" }, "next": {} },
+      "itemUseCounts": { "id": "itemUseCounts", "type": "getRuntimeCollection", "inputs": { "collectionId": "itemUses" }, "next": {} },
+      "items": { "id": "items", "type": "mergeRecords", "inputs": { "left": { "nodeId": "databaseItems", "port": "value" }, "right": { "nodeId": "itemUseCounts", "port": "value" }, "keyField": "id" }, "next": {} },
+      "activeItem": { "id": "activeItem", "type": "getRecordValue", "inputs": { "databaseId": "exampleItems", "key": { "variable": "demo:activeItemId" } }, "next": {} },
+      "activeName": { "id": "activeName", "type": "getProperty", "inputs": { "value": { "nodeId": "activeItem", "port": "value" }, "key": "name" }, "next": {} },
+      "activeInvestigation": { "id": "activeInvestigation", "type": "getProperty", "inputs": { "value": { "nodeId": "activeItem", "port": "value" }, "key": "investigationText" }, "next": {} }
+    }
+  },
+  "events": {
+    "onCreate": {
+      "cl2": "start: flowStart(); emit: emitEvent(\"example:inventory_opened\", {}); end: end();"
+    }
+  }
+}

@@ -1,0 +1,76 @@
+[
+  {
+    "id": "example-seed-inventory",
+    "label": "初始化示例物品栏",
+    "description": "通过运行时集合 API 为数据库物品设置首次库存",
+    "flowInputs": [{ "name": "flowIn", "kind": "flow" }],
+    "flowOutputs": [{ "name": "flowOut", "kind": "flow" }],
+    "valueInputs": [],
+    "valueOutputs": [],
+    "blueprint": {
+      "startNodeId": "start",
+      "nodes": {
+        "start": { "id": "start", "type": "flowStart", "inputs": {}, "next": { "flowOut": { "nodeId": "ticket", "port": "flowIn" } } },
+        "ticketRecord": { "id": "ticketRecord", "type": "getRecordValue", "inputs": { "databaseId": "exampleItems", "key": "ticket" }, "next": {} },
+        "ticketQuantity": { "id": "ticketQuantity", "type": "getProperty", "inputs": { "value": { "nodeId": "ticketRecord", "port": "value" }, "key": "initialQuantity" }, "next": {} },
+        "letterRecord": { "id": "letterRecord", "type": "getRecordValue", "inputs": { "databaseId": "exampleItems", "key": "sealed-letter" }, "next": {} },
+        "letterQuantity": { "id": "letterQuantity", "type": "getProperty", "inputs": { "value": { "nodeId": "letterRecord", "port": "value" }, "key": "initialQuantity" }, "next": {} },
+        "magnifierRecord": { "id": "magnifierRecord", "type": "getRecordValue", "inputs": { "databaseId": "exampleItems", "key": "magnifier" }, "next": {} },
+        "magnifierQuantity": { "id": "magnifierQuantity", "type": "getProperty", "inputs": { "value": { "nodeId": "magnifierRecord", "port": "value" }, "key": "initialQuantity" }, "next": {} },
+        "ticket": { "id": "ticket", "type": "callApi", "inputs": { "apiId": "runtime.collection.operation", "payload": { "collectionId": "inventory", "recordId": "ticket", "operation": "setIfAbsent", "value": { "nodeId": "ticketQuantity", "port": "value" }, "minimum": 0 }, "resultVariable": "" }, "next": { "flowOut": { "nodeId": "letter", "port": "flowIn" } } },
+        "letter": { "id": "letter", "type": "callApi", "inputs": { "apiId": "runtime.collection.operation", "payload": { "collectionId": "inventory", "recordId": "sealed-letter", "operation": "setIfAbsent", "value": { "nodeId": "letterQuantity", "port": "value" }, "minimum": 0 }, "resultVariable": "" }, "next": { "flowOut": { "nodeId": "magnifier", "port": "flowIn" } } },
+        "magnifier": { "id": "magnifier", "type": "callApi", "inputs": { "apiId": "runtime.collection.operation", "payload": { "collectionId": "inventory", "recordId": "magnifier", "operation": "setIfAbsent", "value": { "nodeId": "magnifierQuantity", "port": "value" }, "minimum": 0 }, "resultVariable": "" }, "next": { "flowOut": { "nodeId": "end", "port": "flowIn" } } },
+        "end": { "id": "end", "type": "activityEnd", "inputs": {}, "next": {} }
+      }
+    }
+  },
+  {
+    "id": "example-inspect-item",
+    "label": "调查物品",
+    "description": "选择数据库物品并发出调查事件",
+    "flowInputs": [{ "name": "flowIn", "kind": "flow" }],
+    "flowOutputs": [{ "name": "flowOut", "kind": "flow" }],
+    "valueInputs": [{ "name": "itemId", "kind": "value", "type": "string" }],
+    "valueOutputs": [],
+    "blueprint": {
+      "startNodeId": "start",
+      "nodes": {
+        "start": { "id": "start", "type": "flowStart", "inputs": {}, "next": { "flowOut": { "nodeId": "select", "port": "flowIn" } } },
+        "select": { "id": "select", "type": "setVariable", "inputs": { "key": "demo:activeItemId", "value": { "parameter": "itemId" } }, "next": { "flowOut": { "nodeId": "emit", "port": "flowIn" } } },
+        "emit": { "id": "emit", "type": "emitEvent", "inputs": { "eventName": "example:item_inspected", "payload": { "itemId": { "parameter": "itemId" } } }, "next": { "flowOut": { "nodeId": "end", "port": "flowIn" } } },
+        "end": { "id": "end", "type": "activityEnd", "inputs": {}, "next": {} }
+      }
+    }
+  },
+  {
+    "id": "example-use-item",
+    "label": "使用物品（扣除库存／推进时间／增加金钱）",
+    "description": "读取数据库物品数据，原子扣减库存；成功时计数、加钱并推进游戏时间",
+    "flowInputs": [{ "name": "flowIn", "kind": "flow" }],
+    "flowOutputs": [{ "name": "flowOut", "kind": "flow" }],
+    "valueInputs": [{ "name": "itemId", "kind": "value", "type": "string" }],
+    "valueOutputs": [],
+    "blueprint": {
+      "startNodeId": "start",
+      "nodes": {
+        "start": { "id": "start", "type": "flowStart", "inputs": {}, "next": { "flowOut": { "nodeId": "readItem", "port": "flowIn" } } },
+        "readItem": { "id": "readItem", "type": "getRecord", "inputs": { "databaseId": "exampleItems", "key": { "parameter": "itemId" }, "resultVariable": "__local:itemRecord" }, "next": { "flowOut": { "nodeId": "removeOne", "port": "flowIn" } } },
+        "removeOne": { "id": "removeOne", "type": "callApi", "inputs": { "apiId": "runtime.collection.operation", "payload": { "collectionId": "inventory", "recordId": { "parameter": "itemId" }, "operation": "delta", "value": -1, "minimum": 0 }, "resultVariable": "__local:inventoryChange" }, "next": { "flowOut": { "nodeId": "branch", "port": "flowIn" } } },
+        "inventoryChange": { "id": "inventoryChange", "type": "getLocalVariable", "inputs": { "key": "inventoryChange" }, "next": {} },
+        "hasInventory": { "id": "hasInventory", "type": "getProperty", "inputs": { "value": { "nodeId": "inventoryChange", "port": "value" }, "key": "ok" }, "next": {} },
+        "itemRecord": { "id": "itemRecord", "type": "getLocalVariable", "inputs": { "key": "itemRecord" }, "next": {} },
+        "moneyReward": { "id": "moneyReward", "type": "getProperty", "inputs": { "value": { "nodeId": "itemRecord", "port": "value" }, "key": "moneyReward" }, "next": {} },
+        "useMinutes": { "id": "useMinutes", "type": "getProperty", "inputs": { "value": { "nodeId": "itemRecord", "port": "value" }, "key": "useMinutes" }, "next": {} },
+        "branch": { "id": "branch", "type": "branch", "inputs": { "condition": { "nodeId": "hasInventory", "port": "value" } }, "next": { "true": { "nodeId": "countItem", "port": "flowIn" }, "false": { "nodeId": "failed", "port": "flowIn" } } },
+        "countItem": { "id": "countItem", "type": "callApi", "inputs": { "apiId": "runtime.collection.operation", "payload": { "collectionId": "itemUses", "recordId": { "parameter": "itemId" }, "operation": "delta", "value": 1, "minimum": 0 }, "resultVariable": "" }, "next": { "flowOut": { "nodeId": "countTotal", "port": "flowIn" } } },
+        "countTotal": { "id": "countTotal", "type": "applyPublicVariableEffect", "inputs": { "id": 11, "delta": 1 }, "next": { "flowOut": { "nodeId": "addMoney", "port": "flowIn" } } },
+        "addMoney": { "id": "addMoney", "type": "applyPublicVariableEffect", "inputs": { "id": 10, "delta": { "nodeId": "moneyReward", "port": "value" } }, "next": { "flowOut": { "nodeId": "advanceTime", "port": "flowIn" } } },
+        "advanceTime": { "id": "advanceTime", "type": "consumeTime", "inputs": { "minutes": { "nodeId": "useMinutes", "port": "value" } }, "next": { "flowOut": { "nodeId": "markUsed", "port": "flowIn" } } },
+        "markUsed": { "id": "markUsed", "type": "markEventState", "inputs": { "id": "tour:item_used" }, "next": { "flowOut": { "nodeId": "success", "port": "flowIn" } } },
+        "success": { "id": "success", "type": "setVariable", "inputs": { "key": "demo:lastItemResult", "value": "使用成功：时间已推进、余额已增加" }, "next": { "flowOut": { "nodeId": "end", "port": "flowIn" } } },
+        "failed": { "id": "failed", "type": "setVariable", "inputs": { "key": "demo:lastItemResult", "value": "库存不足：未推进时间，也未增加金钱" }, "next": { "flowOut": { "nodeId": "end", "port": "flowIn" } } },
+        "end": { "id": "end", "type": "activityEnd", "inputs": {}, "next": {} }
+      }
+    }
+  }
+]

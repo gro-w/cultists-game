@@ -8,6 +8,11 @@
     "patient-queue-manager",
     "social-story-manager",
     "achievement-manager",
-    "bgm-manager"
+    "bgm-manager",
+    "system:cat",
+    "system:cp",
+    "system:ls",
+    "system:mv",
+    "system:touch"
   ]
 }

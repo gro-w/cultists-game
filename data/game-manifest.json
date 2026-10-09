@@ -3,7 +3,7 @@
   "version": "0.1.0-ng-content",
   "frameworkManifest": "framework-manifest.json",
   "frameworkCollections": "framework-runtime.framework.json",
-  "contentRoot": "data/",
+  "contentRoot": "./",
   "nativeContent": [
     "bgm.json",
     "media.json",

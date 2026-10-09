@@ -1,0 +1,26 @@
+{
+  "id": "features",
+  "title": "引擎功能",
+  "icon": "🧩",
+  "x": 180,
+  "y": 130,
+  "width": 440,
+  "height": 280,
+  "resizable": true,
+  "singleInstance": true,
+  "root": {
+    "widgetId": "features-root",
+    "type": "container",
+    "flow": "vertical",
+    "gap": 10,
+    "padding": 18,
+    "children": [
+      { "widgetId": "features-title", "type": "label", "text": "数据驱动的桌面引擎" },
+      { "widgetId": "features-activity", "type": "label", "text": "• CL2 Activity：启动、排队并执行流程" },
+      { "widgetId": "features-window", "type": "label", "text": "• Window：可拖动、缩放和多窗口管理" },
+      { "widgetId": "features-widget", "type": "label", "text": "• Widget：按钮事件通过 Activity API 调度" },
+      { "widgetId": "features-vfs", "type": "label", "text": "• VFS：桌面快捷方式由虚拟文件树生成" },
+      { "widgetId": "features-root-path", "type": "label", "text": "数据根来自本页的 #data-location：example.data" }
+    ]
+  }
+}

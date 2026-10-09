@@ -1,0 +1,19 @@
+{
+  "id": "document",
+  "title": "文档",
+  "icon": "📝",
+  "width": 720,
+  "height": 520,
+  "resizable": true,
+  "singleInstance": false,
+  "root": {
+    "widgetId": "document-editor-root",
+    "type": "documentEditor",
+    "className": "vfs-document-editor"
+  },
+  "events": {
+    "onCreate": {
+      "cl2": "start: flowStart(); emit: emitEvent(\"example:document_editor_opened\", {}); end: end();"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": "terminal",
+  "title": "终端",
+  "icon": "⌨️",
+  "width": 760,
+  "height": 520,
+  "resizable": true,
+  "singleInstance": true,
+  "root": {
+    "widgetId": "terminal-root",
+    "type": "terminal",
+    "className": "vfs-terminal"
+  },
+  "events": {
+    "onCreate": {
+      "cl2": "start: flowStart(); emit: emitEvent(\"example:terminal_opened\", {}); end: end();"
+    }
+  }
+}

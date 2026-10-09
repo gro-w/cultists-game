@@ -1,0 +1,34 @@
+{
+  "exampleItems": [
+    {
+      "id": "ticket",
+      "name": "旧车票",
+      "icon": "🎫",
+      "category": "纪念品",
+      "investigationText": "车票上的日期已经褪色，背面留着一行潦草的字：不要在午夜之后乘车。纸张边缘有被反复摩挲的痕迹。",
+      "useMinutes": 20,
+      "moneyReward": 5,
+      "initialQuantity": 2
+    },
+    {
+      "id": "sealed-letter",
+      "name": "密封信件",
+      "icon": "✉️",
+      "category": "信件",
+      "investigationText": "封口处压着陌生的蜡印。信纸透出淡淡的海盐气味，拆开后发现里面夹着一张可兑换零钱的旧收据。",
+      "useMinutes": 40,
+      "moneyReward": 12,
+      "initialQuantity": 1
+    },
+    {
+      "id": "magnifier",
+      "name": "放大镜",
+      "icon": "🔍",
+      "category": "工具",
+      "investigationText": "镜片边缘有细小裂纹。对着灯光查看时，能看见玻璃里封着一道银色细线。",
+      "useMinutes": 20,
+      "moneyReward": 2,
+      "initialQuantity": 1
+    }
+  ]
+}

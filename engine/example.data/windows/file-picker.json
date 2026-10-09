@@ -1,0 +1,15 @@
+{
+  "id": "file-picker",
+  "title": "选择文件",
+  "icon": "📄",
+  "x": 220,
+  "y": 140,
+  "width": 460,
+  "height": 360,
+  "resizable": true,
+  "singleInstance": false,
+  "root": {
+    "widgetId": "file-picker-root",
+    "type": "filePicker"
+  }
+}

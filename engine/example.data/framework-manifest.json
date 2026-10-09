@@ -1,0 +1,25 @@
+{
+  "documents": {
+    "eventState": {
+      "data": "onboarding.json",
+      "events": {
+        "changed": "onboarding:changed",
+        "request": "onboarding:hint_requested",
+        "close": "onboarding:hint_closed"
+      },
+      "triggers": {
+        "example:started": "tour:started",
+        "example:file_browser_opened": "tour:file_browser_opened",
+        "example:document_editor_opened": "tour:document_editor_opened",
+        "example:terminal_opened": "tour:terminal_opened",
+        "example:inventory_opened": "tour:inventory_opened",
+        "example:item_inspected": "tour:item_inspected"
+      }
+    },
+    "structures": "structures.json",
+    "databases": "databases.json",
+    "publicVariables": "public-variables.json",
+    "runtimeCollections": "framework-runtime.json",
+    "blueprintNodes": "blueprint-nodes.json"
+  }
+}

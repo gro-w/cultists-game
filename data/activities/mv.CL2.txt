@@ -1,0 +1,11 @@
+/** CL2 command application: mv */
+reusablevalue invocation: getParameter[0];
+reusablevalue arguments: getProperty[invocation[], "arguments"];
+reusablevalue cwd: getProperty[invocation[], "cwd"];
+reusablevalue terminal: getProperty[invocation[], "terminalInstanceId"];
+
+start: flowStart();
+run: virtualFileSystem("mv", arguments[], null, null, null, null, cwd[], terminal[]) {
+    default end;
+};
+end: end();

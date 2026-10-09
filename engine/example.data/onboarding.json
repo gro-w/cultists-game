@@ -1,0 +1,50 @@
+[
+  {
+    "id": "open-file-browser",
+    "trigger": "tour:started",
+    "completeOn": "tour:file_browser_opened",
+    "target": ".desktop-icon[data-icon-id=\"/home/desktop/文件浏览器.lnk\"]",
+    "title": "先逛逛虚拟文件系统",
+    "text": "双击桌面上的“文件浏览器”，浏览虚拟桌面中的文件和程序。"
+  },
+  {
+    "id": "open-document-editor",
+    "trigger": "tour:file_browser_opened",
+    "completeOn": "tour:document_editor_opened",
+    "target": ".desktop-icon[data-icon-id=\"/home/desktop/文档编辑器.lnk\"]",
+    "title": "打开一份虚拟文档",
+    "text": "双击“文档编辑器”查看示例文档；也可以在文件浏览器中打开任意 .txt 文件。"
+  },
+  {
+    "id": "open-terminal",
+    "trigger": "tour:document_editor_opened",
+    "completeOn": "tour:terminal_opened",
+    "target": ".desktop-icon[data-icon-id=\"/home/desktop/终端.lnk\"]",
+    "title": "试试虚拟终端",
+    "text": "打开终端后输入 pwd、ls 或 cat 演示文档.txt，命令会通过虚拟文件系统运行。"
+  },
+  {
+    "id": "open-inventory",
+    "trigger": "tour:terminal_opened",
+    "completeOn": "tour:inventory_opened",
+    "target": ".desktop-icon[data-icon-id=\"/home/desktop/物品系统.lnk\"]",
+    "title": "探索数据库物品",
+    "text": "打开“物品系统”，每件物品来自示例数据库，并可查看调查内容。"
+  },
+  {
+    "id": "inspect-item",
+    "trigger": "tour:inventory_opened",
+    "completeOn": "tour:item_inspected",
+    "target": ".demo-item-inspect",
+    "title": "调查一件物品",
+    "text": "点击物品条目旁的“调查”，右侧会显示数据库中的调查内容。"
+  },
+  {
+    "id": "use-item",
+    "trigger": "tour:item_inspected",
+    "completeOn": "tour:item_used",
+    "target": ".demo-item-use",
+    "title": "使用物品并推进时间",
+    "text": "使用物品会扣除库存、推进游戏时间、增加金钱，并更新使用次数。"
+  }
+]

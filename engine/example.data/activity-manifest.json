@@ -1,0 +1,11 @@
+{
+  "activityIds": [
+    { "id": "default", "file": "default.CL2.txt" },
+    { "id": "showcase", "file": "showcase.CL2.txt" },
+    { "id": "system:ls", "file": "system-ls.CL2.txt" },
+    { "id": "system:cat", "file": "system-cat.CL2.txt" },
+    { "id": "system:cp", "file": "system-cp.CL2.txt" },
+    { "id": "system:mv", "file": "system-mv.CL2.txt" },
+    { "id": "system:touch", "file": "system-touch.CL2.txt" }
+  ]
+}

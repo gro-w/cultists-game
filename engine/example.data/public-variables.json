@@ -1,0 +1,23 @@
+[
+  {
+    "id": 10,
+    "name": "演示金钱",
+    "type": "integer",
+    "defaultValue": 20,
+    "description": "使用物品获得的演示货币"
+  },
+  {
+    "id": 11,
+    "name": "物品使用总次数",
+    "type": "integer",
+    "defaultValue": 0,
+    "description": "记录成功使用物品的总次数"
+  },
+  {
+    "id": 12,
+    "name": "演示物品栏状态",
+    "type": "json",
+    "defaultValue": {},
+    "description": "由运行时物品集合同步的公共物品栏状态"
+  }
+]

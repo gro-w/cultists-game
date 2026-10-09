@@ -1,0 +1,14 @@
+{
+  "publicStateVariableId": 12,
+  "collections": {
+    "inventory": {
+      "databaseId": "exampleItems",
+      "mergeState": true,
+      "stateField": "quantity",
+      "filterState": true
+    },
+    "itemUses": {
+      "stateOnly": true
+    }
+  }
+}

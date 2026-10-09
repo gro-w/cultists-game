@@ -1,0 +1,5 @@
+/** CL2 demo: a widget event schedules an Activity, which opens another window. */
+
+start: flowStart();
+open: openWindow("features");
+end: end();
