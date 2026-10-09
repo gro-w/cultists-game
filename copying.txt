@@ -1,0 +1,11 @@
+Game content notice
+-------------------
+
+The Cultists game repository contains copyrighted game content that is separate
+from the Cultists engine. Unless an individual file states otherwise, the
+story, characters, dialogue, medical content, artwork, audio, video, game data,
+and other game assets are reserved by their respective copyright holders.
+
+The BSD 2-Clause License in engine/copying.txt governs the Cultists engine
+in the engine/ submodule. The game content in this repository is separate
+and is not covered by that license.
