@@ -24,7 +24,7 @@
     ],
     "valueOutputs": [],
     "blueprint": {
-      "cl2": "/** CL2 export for activity data/blueprint-nodes.framework.json[0].blueprint Generated from canonical blueprint JSON. */ start: flowStart(); /** @cl2.pos 40,80 */ write: setVariable(\"blueprint.test.flow.value\", {\"parameter\":\"value\"}); /** @cl2.pos 260,80 */ end: end(); /** @cl2.pos 500,80 */"
+      "cl2": "/** CL2 export for activity data/blueprint-nodes.framework.json[0].blueprint Generated from canonical blueprint JSON. */ start: flowStart(); /** @cl2.pos 40,80 */ write: setVariable(\"blueprint.test.flow.value\", {\"parameter\":\"value\"}); /** @cl2.pos 260,80 */ end: end(default); /** @cl2.pos 500,80 */"
     }
   },
   {
@@ -45,10 +45,7 @@
         "name": "value",
         "kind": "value",
         "type": "number",
-        "source": {
-          "nodeId": "double",
-          "port": "value"
-        }
+        "receiverId": "result"
       }
     ],
     "blueprint": {
@@ -64,6 +61,17 @@
               "parameter": "value"
             },
             "right": 2
+          },
+          "next": {}
+        },
+        "result": {
+          "id": "result",
+          "type": "valueReceiver",
+          "inputs": {
+            "value": {
+              "nodeId": "double",
+              "port": "value"
+            }
           },
           "next": {}
         }
@@ -95,7 +103,7 @@
     ],
     "valueOutputs": [],
     "blueprint": {
-      "cl2": "/** CL2 export for activity data/blueprint-nodes.framework.json[2].blueprint Generated from canonical blueprint JSON. */ start: flowStart(); consume: consumeTime({\"parameter\":\"minutes\"}); end: end();"
+      "cl2": "/** CL2 export for activity data/blueprint-nodes.framework.json[2].blueprint Generated from canonical blueprint JSON. */ start: flowStart(); consume: consumeTime({\"parameter\":\"minutes\"}); end: end(default);"
     }
   },
   {
@@ -127,7 +135,7 @@
     ],
     "valueOutputs": [],
     "blueprint": {
-      "cl2": "/** CL2 export for activity data/blueprint-nodes.framework.json[3].blueprint Generated from canonical blueprint JSON. */ start: flowStart(); emit: emitEvent(\"activity:ending\", {\"endingId\":{\"parameter\":\"endingId\"},\"displayTo\":{\"parameter\":\"displayTo\"}}); end: end();"
+      "cl2": "/** CL2 export for activity data/blueprint-nodes.framework.json[3].blueprint Generated from canonical blueprint JSON. */ start: flowStart(); emit: emitEvent(\"activity:ending\", {\"endingId\":{\"parameter\":\"endingId\"},\"displayTo\":{\"parameter\":\"displayTo\"}}); end: end(default);"
     }
   },
   {
