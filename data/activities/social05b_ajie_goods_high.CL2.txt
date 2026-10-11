@@ -29,7 +29,7 @@ choice_0_join: text("dorm-bottom", "旁白", "（场景继续）", "dlg:choice_0
     default after_0;
 };
 
-choice_0_op0: applyPublicVariableEffect(-10, 40);
+choice_0_op0: applyPublicVariableEffect(40, null, -10);
 
 choice_0_op0_t0: text("dorm-bottom", "阿杰", "这样才刺激嘛。", "dlg:choice_0_op0_t0:continue");
 
@@ -39,7 +39,7 @@ choice_0_op0_t2: text("dorm-bottom", "阿杰", "你是对意外过敏吗？", "d
     default choice_0_join;
 };
 
-choice_0_op1: applyPublicVariableEffect(10, 40);
+choice_0_op1: applyPublicVariableEffect(40, null, 10);
 
 choice_0_op1_t0: text("dorm-bottom", "阿杰", "我买的就是风险。", "dlg:choice_0_op1_t0:continue") {
     default choice_0_join;

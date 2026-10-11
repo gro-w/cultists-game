@@ -40,7 +40,7 @@ choice8: choice([{"label":"好吧，那我不看了。"},{"label":"他人的观�
     option<2> choice8_op1;
 };
 
-choice8_op0: setGlobal(40, 5);
+choice8_op0: applyPublicVariableEffect(40, null, 5);
 
 n9: text("dorm-bottom", "阿杰", "其实这也是我的观点。") {
     default consume_time_20_6;
@@ -54,7 +54,7 @@ n11: text("dorm-bottom", "阿杰", "没什么意思，快抽卡。") {
     default consume_time_20_10;
 };
 
-choice8_op1: setGlobal(40, -5);
+choice8_op1: applyPublicVariableEffect(40, null, -5);
 
 n12: text("dorm-bottom", "阿杰", "长满结晶的大脑么，很难下嘴啊……") {
     default consume_time_20_8;
@@ -79,7 +79,7 @@ choice_final_20: choice([{"label":"是不是我不够虔诚？"},{"label":"能�
     option<2> choice_final_20_op1;
 };
 
-choice_final_20_op0: setGlobal(40, -5) {
+choice_final_20_op0: applyPublicVariableEffect(40, null, -5) {
     default consume_time_20_12;
 };
 
@@ -87,7 +87,7 @@ choice_final_20_0_0: text("dorm-bottom", "阿杰", "神不在乎。") {
     default schedule_guard;
 };
 
-choice_final_20_op1: setGlobal(40, 5);
+choice_final_20_op1: applyPublicVariableEffect(40, null, 5);
 
 choice_final_20_1_0: text("dorm-bottom", "阿杰", "那你就做好准备为游戏之神奉献全部吧。") {
     default schedule_guard;

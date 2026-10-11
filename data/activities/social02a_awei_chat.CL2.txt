@@ -32,7 +32,7 @@ choice6: choice([], 2, "dlg:choice6:select") {
     option<2> choice6_op1;
 }; /** @cl2.pos 100,100 */
 
-choice6_op0: applyPublicVariableEffect(5, 41) {
+choice6_op0: applyPublicVariableEffect(41, null, 5) {
     default consume_time_20_10;
 }; /** @cl2.pos 100,100 */
 
@@ -40,7 +40,7 @@ n7: text("dorm-bottom", "阿伟", "看来不止我一个人这么觉得。", "dl
     default end;
 }; /** @cl2.pos 100,100 */
 
-choice6_op1: applyPublicVariableEffect(-5, 41) {
+choice6_op1: applyPublicVariableEffect(41, null, -5) {
     default choice6_op1_suspicion;
 }; /** @cl2.pos 100,100 */
 
@@ -86,6 +86,6 @@ consume_time_20_12: framework:consumeTime(20) {
     default n8;
 }; /** @cl2.pos 30,40 */
 
-choice6_op1_suspicion: applyPublicVariableEffect(5, 0) {
+choice6_op1_suspicion: applyPublicVariableEffect(0, null, 5) {
     default consume_time_20_12;
 }; /** @cl2.pos 100,100 */

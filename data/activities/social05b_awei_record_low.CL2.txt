@@ -35,7 +35,7 @@ choice_0_join: text("dorm-bottom", "旁白", "（场景继续）", "dlg:choice_0
     default after_0;
 };
 
-choice_0_op0: applyPublicVariableEffect(-10, 41);
+choice_0_op0: applyPublicVariableEffect(41, null, -10);
 
 choice_0_op0_t0: text("dorm-bottom", "阿伟", "我听着好好的。", "dlg:choice_0_op0_t0:continue");
 
@@ -45,7 +45,7 @@ choice_0_op0_t2: text("dorm-bottom", "阿伟", "随你怎么想。", "dlg:choice
     default choice_0_join;
 };
 
-choice_0_op1: applyPublicVariableEffect(10, 41);
+choice_0_op1: applyPublicVariableEffect(41, null, 10);
 
 choice_0_op1_t0: text("dorm-bottom", "主控", "所以你并没有买耳机？", "dlg:choice_0_op1_t0:continue");
 

@@ -31,7 +31,7 @@ choice_0_join: text("dorm-bottom", "旁白", "（场景继续）", "dlg:choice_0
     default after_0;
 };
 
-choice_0_op0: applyPublicVariableEffect(-10, 40);
+choice_0_op0: applyPublicVariableEffect(40, null, -10);
 
 choice_0_op0_t0: text("dorm-bottom", "阿杰", "没什么用，就是放在桌上。", "dlg:choice_0_op0_t0:continue");
 
@@ -41,7 +41,7 @@ choice_0_op0_t2: text("dorm-bottom", "阿杰", "放在桌上啊，就是这样�
     default choice_0_join;
 };
 
-choice_0_op1: applyPublicVariableEffect(10, 40);
+choice_0_op1: applyPublicVariableEffect(40, null, 10);
 
 choice_0_op1_t0: text("dorm-bottom", "阿杰", "不是拿来玩的，是一种为了满足精神需要的小玩偶。", "dlg:choice_0_op1_t0:continue") {
     default choice_0_join;

@@ -59,7 +59,7 @@ streak_text3: text("dorm-bottom", "阿伟", "他居然计数。", "dlg:streak_te
 
 streak_text4: text("dorm-bottom", "彬彬", "这个精神状态已经很危险了。", "dlg:streak_text4:continue");
 
-suspicion: applyPublicVariableEffect(10, 0);
+suspicion: applyPublicVariableEffect(0, null, 10);
 
 check_branch_0: branch(check_0__value[]) {
     option<1> check_branch_1;

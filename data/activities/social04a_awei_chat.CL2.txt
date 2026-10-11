@@ -28,11 +28,11 @@ choice5: choice([{"label":"加油吧。"},{"label":"你不是明天就要还了�
     option<2> choice5_op1;
 };
 
-choice5_op0: applyPublicVariableEffect(5, 41) {
+choice5_op0: applyPublicVariableEffect(41, null, 5) {
     default end;
 };
 
-choice5_op1: applyPublicVariableEffect(5, 0);
+choice5_op1: applyPublicVariableEffect(0, null, 5);
 
 n6: text("dorm-bottom", "阿伟", "怎么会，你别吓唬我。", "dlg:n6:continue") {
     default consume_time_20_9;

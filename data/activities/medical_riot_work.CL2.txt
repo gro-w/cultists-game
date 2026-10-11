@@ -53,11 +53,11 @@ check: framework:diceCheck(skill__value[]) {
 
 end: end(); /** @cl2.pos 100,100 */
 
-riotFine: applyPublicVariableEffect(-600, 2) {
+riotFine: applyPublicVariableEffect(2, null, -600) {
     default end;
 }; /** @cl2.pos 100,100 */
 
-riotLargeSuccess: applyPublicVariableEffect(-300, 2) {
+riotLargeSuccess: applyPublicVariableEffect(2, null, -300) {
     default end;
 }; /** @cl2.pos 100,100 */
 

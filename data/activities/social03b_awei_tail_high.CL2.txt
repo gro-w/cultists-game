@@ -48,7 +48,7 @@ choice10: choice([{"label":"你可以再去问问别人。"},{"label":"你不会
     option<2> choice10_op1;
 };
 
-choice10_op0: setGlobal(41, 5);
+choice10_op0: applyPublicVariableEffect(41, null, 5);
 
 n11: text("dorm-bottom", "阿伟", "你知道阿杰的，从来不会借钱给别人。至于彬彬……");
 
@@ -62,7 +62,7 @@ n14: text("dorm-bottom", "player", "你最近总疑神疑鬼的，《月之暗�
     default consume_time_20_8;
 };
 
-choice10_op1: setGlobal(41, -5) {
+choice10_op1: applyPublicVariableEffect(41, null, -5) {
     default listen_check;
 };
 
@@ -91,13 +91,13 @@ choice_final_24: choice([{"label":"不会是过几天“医师资格考试”泄
     option<2> choice_final_24_op1;
 };
 
-choice_final_24_op0: setGlobal(41, 5);
+choice_final_24_op0: applyPublicVariableEffect(41, null, 5);
 
 choice_final_24_0_0: text("dorm-bottom", "阿伟", "一点都不好笑。") {
     default schedule_guard;
 };
 
-choice_final_24_op1: setGlobal(41, -5) {
+choice_final_24_op1: applyPublicVariableEffect(41, null, -5) {
     default consume_time_20_12;
 };
 

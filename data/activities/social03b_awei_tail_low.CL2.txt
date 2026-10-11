@@ -46,7 +46,7 @@ choice10: choice([{"label":"你要不再去问问别人。"},{"label":"你不会
     option<2> choice10_op1;
 };
 
-choice10_op0: setGlobal(41, 5);
+choice10_op0: applyPublicVariableEffect(41, null, 5);
 
 n11: text("dorm-bottom", "阿伟", "我都问了。");
 
@@ -60,7 +60,7 @@ n14: text("dorm-bottom", "player", "你从前都不借钱的，《月之暗面�
     default consume_time_20_8;
 };
 
-choice10_op1: setGlobal(41, -5);
+choice10_op1: applyPublicVariableEffect(41, null, -5);
 
 n15: text("dorm-bottom", "阿伟", "说到这儿，我还是总能从这首歌里听到那段声音……它越来越清晰了。");
 
@@ -85,7 +85,7 @@ choice_final_23: choice([{"label":"你说来听听。"},{"label":"当然不，�
     option<2> choice_final_23_op1;
 };
 
-choice_final_23_op0: setGlobal(41, 5) {
+choice_final_23_op0: applyPublicVariableEffect(41, null, 5) {
     default choice_final_23_op0_suspicion;
 };
 
@@ -97,7 +97,7 @@ choice_final_23_0_1: text("dorm-bottom", "player", "你是不是压力太大把�
     default schedule_guard;
 };
 
-choice_final_23_op1: setGlobal(41, -5) {
+choice_final_23_op1: applyPublicVariableEffect(41, null, -5) {
     default consume_time_20_12;
 };
 
@@ -153,7 +153,7 @@ consume_time_20_12: framework:consumeTime(20) {
     default choice_final_23_1_0;
 }; /** @cl2.pos 30,40 */
 
-choice_final_23_op0_suspicion: setGlobal(0, 5) {
+choice_final_23_op0_suspicion: applyPublicVariableEffect(0, null, 5) {
     default choice_final_23_0_0;
 };
 

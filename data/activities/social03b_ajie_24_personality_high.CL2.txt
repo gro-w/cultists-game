@@ -46,7 +46,7 @@ choice11: choice([{"label":"是么？那我不看了。"},{"label":"他人的观
     option<2> choice11_op1;
 };
 
-choice11_op0: setGlobal(40, 5);
+choice11_op0: applyPublicVariableEffect(40, null, 5);
 
 n12: text("dorm-bottom", "阿杰", "其实这也是我的观点。") {
     default consume_time_20_6;
@@ -58,7 +58,7 @@ n14: text("dorm-bottom", "阿杰", "没什么意思，快抽卡。") {
     default n18;
 };
 
-choice11_op1: setGlobal(40, -5);
+choice11_op1: applyPublicVariableEffect(40, null, -5);
 
 n15: text("dorm-bottom", "阿杰", "长满结晶的大脑么，很难下嘴啊……") {
     default consume_time_20_7;
@@ -89,7 +89,7 @@ choice_final_25: choice([{"label":"是吗？好像也对。"},{"label":"不对�
     option<2> choice_final_25_op1;
 };
 
-choice_final_25_op0: setGlobal(40, 5);
+choice_final_25_op0: applyPublicVariableEffect(40, null, 5);
 
 choice_final_25_0_0: text("dorm-bottom", "阿杰", "想什么呢？恍恍惚惚的。") {
     default consume_time_20_10;
@@ -103,7 +103,7 @@ choice_final_25_0_2: text("dorm-bottom", "阿杰", "神经太敏感了吧，总�
     default schedule_guard;
 };
 
-choice_final_25_op1: setGlobal(0, 5);
+choice_final_25_op1: applyPublicVariableEffect(0, null, 5);
 
 choice_final_25_1_0: text("dorm-bottom", "阿杰", "说什么呢你？");
 

@@ -54,11 +54,11 @@ trust_drink: text("dorm-bottom", "阿杰", "请你喝8喜。") {
     default consume_time_20_7;
 }; /** @cl2.pos 3780,180 */
 
-first_favor_plus: setGlobal(40, 5) {
+first_favor_plus: applyPublicVariableEffect(40, null, 5) {
     default trust;
 }; /** @cl2.pos 2660,360 */
 
-first_favor_minus: setGlobal(40, -5); /** @cl2.pos 2660,700 */
+first_favor_minus: applyPublicVariableEffect(40, null, -5); /** @cl2.pos 2660,700 */
 
 pay_reply: text("dorm-bottom", "阿杰", "你充吧，我不想充。"); /** @cl2.pos 2660,540 */
 
@@ -101,11 +101,11 @@ regret_endline: text("dorm-bottom", "player", "……确实。") {
     default schedule_guard;
 }; /** @cl2.pos 5740,540 */
 
-second_favor_plus: setGlobal(40, 5) {
+second_favor_plus: applyPublicVariableEffect(40, null, 5) {
     default excited_reply;
 }; /** @cl2.pos 5460,360 */
 
-second_favor_minus: setGlobal(40, -5) {
+second_favor_minus: applyPublicVariableEffect(40, null, -5) {
     default regret_reply;
 }; /** @cl2.pos 5460,700 */
 

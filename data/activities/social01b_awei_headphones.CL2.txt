@@ -50,7 +50,7 @@ choice12: choice([{"label":"是什么声音？"},{"label":"要不你换首歌试
     option<2> choice12_op1;
 };
 
-choice12_op0: setGlobal(41, 5);
+choice12_op0: applyPublicVariableEffect(41, null, 5);
 
 n13: text("dorm-bottom", "阿伟", "一种……好像谁在说话。");
 
@@ -68,7 +68,7 @@ n17: text("dorm-bottom", "阿伟", "说你自己呢吧……") {
     default consume_time_20_11;
 };
 
-choice12_op1: setGlobal(41, -5);
+choice12_op1: applyPublicVariableEffect(41, null, -5);
 
 n18: text("dorm-bottom", "阿伟", "就是为了听《月之暗面》我才买的这个耳机。");
 

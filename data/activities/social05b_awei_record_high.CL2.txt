@@ -31,7 +31,7 @@ choice_0_join: text("dorm-bottom", "旁白", "（场景继续）", "dlg:choice_0
     default after_0;
 };
 
-choice_0_op0: applyPublicVariableEffect(10, 41);
+choice_0_op0: applyPublicVariableEffect(41, null, 10);
 
 choice_0_op0_t0: text("dorm-bottom", "阿伟", "没必要，总有一天我会全款买下一个最好的耳机。现在还不是时候。", "dlg:choice_0_op0_t0:continue");
 
@@ -41,7 +41,7 @@ choice_0_op0_t2: text("dorm-bottom", "阿伟", "就是到时候的时候。", "d
     default choice_0_join;
 };
 
-choice_0_op1: applyPublicVariableEffect(-10, 41);
+choice_0_op1: applyPublicVariableEffect(41, null, -10);
 
 choice_0_op1_t0: text("dorm-bottom", "阿伟", "再来一百次还是会下单，这就是为什么要剁手吧。", "dlg:choice_0_op1_t0:continue") {
     default choice_0_join;

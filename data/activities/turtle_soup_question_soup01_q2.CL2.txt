@@ -19,7 +19,7 @@ branch: branch(ok__value[]) {
     default end;
 };
 
-increment: setVariable("turtleSoup:questionCount", 1);
+increment: setVariable("turtleSoup:questionCount", null, 1);
 
 answer: emitEvent("turtleSoup:question", {"puzzleId":"binbin_turtle_01","questionId":"soup01_q2","questionText":"他以前喝过类似的汤吗？","answer":"yes"});
 

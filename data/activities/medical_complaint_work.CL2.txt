@@ -55,11 +55,11 @@ persuaded: text("his-app", "系统", "你成功说服了对方，对方暂时平
     default end;
 }; /** @cl2.pos 100,100 */
 
-fine: applyPublicVariableEffect(-100, 2) {
+fine: applyPublicVariableEffect(2, null, -100) {
     default end;
 }; /** @cl2.pos 100,100 */
 
-doubleFine: applyPublicVariableEffect(-200, 2); /** @cl2.pos 100,100 */
+doubleFine: applyPublicVariableEffect(2, null, -200); /** @cl2.pos 100,100 */
 
 end: end(); /** @cl2.pos 100,100 */
 

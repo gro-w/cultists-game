@@ -50,7 +50,7 @@ choice: choice([{"label":"使用万字符","requiredItemId":"swastika","required
 
 use_talisman: emitEvent("content:inventoryOperation", {"itemId":"swastika","count":-1});
 
-use_talisman_cost: setGlobal(1, -5);
+use_talisman_cost: applyPublicVariableEffect(1, null, -5);
 
 use_talisman_spell: emitEvent("content:spellEffect", {"spellId":"book_moon__0","eventId":"追逐事件","choiceId":"use_talisman"}) {
     default end;
